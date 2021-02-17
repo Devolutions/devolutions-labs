@@ -4,6 +4,7 @@
 Azure Lab Services virtual machine base image:
 
  * Windows Server 2019 Datacenter
+ * Windows 10 Enterprise, Version 20H2
  * Large (Nested virtualization) | 8 cores | 32GB RAM
 
 In Server Manager, go to "Local Server" to change to following properties:
@@ -15,9 +16,16 @@ In the "Manage" menu, click "Server Manager Properties", then check "Do not star
 
 Open elevated Windows PowerShell prompt.
 
+Disable PowerShell console quick edit mode:
+
+```powershell
+Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit –Value 0
+```
+
 Update PowerShell default configuration and packages:
 
 ```powershell
+Set-ExecutionPolicy Unrestricted
 Install-PackageProvider Nuget -Force
 Install-Module -Name PowerShellGet -Force
 Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
@@ -35,15 +43,23 @@ Install chocolatey packages:
 choco install -y git
 choco install -y vlc
 choco install -y 7zip
+choco install -y gsudo
 choco install -y firefox
 choco install -y vscode
 choco install -y openssl
 choco install -y kdiff3
+choco install -y filezilla
 choco install -y wireshark
 choco install -y sysinternals
 choco install -y sublimetext3
 choco install -y notepadplusplus
 choco install -y paint.net
+```
+
+Install Windows Terminal (Windows 10 only):
+
+```powershell
+choco install -y microsoft-windows-terminal
 ```
 
 Install PowerShell modules:
@@ -63,7 +79,21 @@ Install Remote Desktop Manager:
 Install-RdmPackage -Edition 'Free'
 ```
 
-Install Docker for Windows:
+## Docker + Hyper-V (Windows 10)
+
+```powershell
+choco install -y docker-desktop
+```
+
+Download and install the [latest WSL2 Linux kernel](https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi).
+
+Install the containers and Hyper-V Windows features:
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName $("Microsoft-Hyper-V", "Containers") -All
+```
+
+## Docker + Hyper-V (Windows Server)
 
 ```powershell
 Install-WindowsFeature -Name Containers
@@ -84,19 +114,6 @@ Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 ```
 
-Install IIS features:
-
-```powershell
-$Features = @(
-    'Web-Server',
-    'Web-WebSockets',
-    'Web-Mgmt-Tools')
-
-foreach ($Feature in $Features) {
-    Install-WindowsFeature -Name $Feature
-}
-```
-
 Install PowerShell 7:
 
 ```powershell
@@ -109,7 +126,22 @@ Reboot (required for Docker, Hyper-V, OpenSSH, IIS):
 Restart-Computer
 ```
 
+## IIS (Windows Server)
+
 Open an elevated Windows PowerShell prompt:
+
+Install IIS features:
+
+```powershell
+$Features = @(
+    'Web-Server',
+    'Web-WebSockets',
+    'Web-Mgmt-Tools')
+
+foreach ($Feature in $Features) {
+    Install-WindowsFeature -Name $Feature
+}
+```
 
 Install IIS URL Rewrite and Application Request Routing (ARR) modules:
 
@@ -161,6 +193,8 @@ Stop-WaykBastion
 Register-WaykBastionService
 ```
 
+## Hyper-V Lab Environment
+
 Install [AutomatedLab](https://automatedlab.org/) PowerShell module:
 
 ```powershell
@@ -195,9 +229,9 @@ Add-LabVirtualNetworkDefinition -Name "ItHelpNetwork" `
     -HyperVProperties @{ SwitchType = "Internal" }
 
 Add-LabMachineDefinition -Name "IT-HELP-DC" `
-    -OperatingSystem "Windows Server 2019 Standard" `
+    -OperatingSystem "Windows Server 2019 Standard (Desktop Experience)" `
     -UserLocale "en-CA" -TimeZone "Eastern Standard Time" `
-    -Memory 2GB -Processors 2 `
+    -Memory 4GB -Processors 4 `
     -DomainName "it-help.loco" `
     -Network "ItHelpNetwork" `
     -IpAddress "192.168.1.5" `
