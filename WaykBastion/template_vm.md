@@ -25,7 +25,7 @@ Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit –Value 0
 Update PowerShell default configuration and packages:
 
 ```powershell
-Set-ExecutionPolicy Unrestricted
+Set-ExecutionPolicy Unrestricted -Force
 Install-PackageProvider Nuget -Force
 Install-Module -Name PowerShellGet -Force
 Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
@@ -34,7 +34,7 @@ Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
 Install chocolatey:
 
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 ```
 
 Install chocolatey packages:
@@ -265,6 +265,199 @@ Saving the virtual machine state is also a useful feature in production, but it 
 
 ### Hyper-V Network Configuration
 
+Create a Hyper-V internal adapter that will be used for the LAN between the Hyper-V host and the lab VMs:
+
+```powershell
+New-VMSwitch –SwitchName "LAN Switch" –SwitchType Internal –Verbose
+```
+
+[Set up a NAT network](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/user-guide/setup-nat-network). Create a new Hyper-V switch for localhost NAT:
+
+```powershell
+New-VMSwitch –SwitchName "NAT Switch" –SwitchType Internal –Verbose
+$NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(NAT Switch)" }
+New-NetIPAddress -IPAddress 10.9.0.1 -PrefixLength 24 -InterfaceIndex $NetAdapter.IfIndex
+New-NetNat –Name NatNetwork –InternalIPInterfaceAddressPrefix 10.9.0.0/24
+```
+
+Download [pfSense Community Edition](https://www.pfsense.org/download/) and extract the .iso file it contains.
+
+Create a new pfSense virtual machine with 2GB of RAM, 2 vCPUs and a 32GB virtual hard disk. Create two network adapters attached (in order) to the NAT switch and the LAN switch that were just created. The NAT switch will be used for the WAN side, and the LAN switch will be used for LAN side in the new router VM.
+
+At the pfSense prompt, select 1 to assign interfaces:
+
+```bash
+Valid interfaces are:
+
+hn0     00:15:5d:19:7f:09    (up) Hyper-V Network Interface
+hn1     00:15:5d:19:7f:0a    (up) Hyper-V Network Interface
+
+Do VLANs need to be set up first?
+If VLANs will not be used, or only for optional interfaces, it is typical to say no here and use the webConfigurator to configure VLANs later, if required.
+
+Should VLANs be set up now [y|n]? n
+
+If the names of the interfaces are not known, auto-detection can be used instead. To use auto-detection, please disconnect all interfaces before pressing 'a' to begin the process.
+
+Enter the WAN interface name or 'a' for auto-detection
+(hn0 hn1 or a): hn0
+
+Enter the LAN interface name or 'a' for auto-detection
+NOTE: this enables full Firewalling/NAT mode.
+(hn1 a or nothing if finished): hn1
+
+The interfaces will be assigned as follows:
+
+WAN  -> hn0
+LAN  -> hn1
+
+Do you want to proceed [y|n]? y
+
+Writing configuration... done.
+One moment while the settings are reloading... done!
+```
+
+At the pfSense prompt, select 2 to configure the WAN interface:
+
+```bash
+Available interfaces:
+
+1 - WAN (hn0 - static)
+2 - LAN (hn1 - static)
+
+Enter the number of the interface you wish to configure: 1
+
+Configure IPv4 address WAN interface via DHCP? (y/n) n
+
+Enter the new WAN IPv4 address. Press <ENTER> for none:
+> 10.9.0.2
+
+Subnet masks are entered as bit counts (as in CIDR notation) in pfSense.
+e.g. 255.255.255.0 = 24
+     255.255.0.0   = 16
+     255.0.0.0     = 8
+
+Enter the new WAN IPv4 subnet bit count (1 to 31):
+> 24
+
+For a WAN, enter the new WAN IPv4 upstream gateway address.
+For a LAN, press <ENTER> for none:
+> 10.9.0.1
+
+Configure IPv6 address WAN interface via DHCP6? (y/n) n
+
+Enter the new WAN IPv6 address. Press <ENTER> for none:
+> 
+
+Please wait while the changes are saved to WAN...
+
+The IPv4 WAN address has been set to 10.9.0.2/24
+
+Press <ENTER> to continue.
+```
+
+At the pfSense prompt, select 2 to configure the LAN interface:
+
+```bash
+Available interfaces:
+
+1 - WAN (hn0 - static)
+2 - LAN (hn1 - static)
+
+Enter the number of the interface you wish to configure: 2
+
+Enter the new LAN IPv4 address. Press <ENTER> for none:
+> 10.10.0.1
+
+Subnet masks are entered as bit counts (as in CIDR notation) in pfSense.
+e.g. 255.255.255.0 = 24
+     255.255.0.0   = 16
+     255.0.0.0     = 8
+
+Enter the new WAN IPv4 subnet bit count (1 to 31):
+> 24
+
+For a WAN, enter the new WAN IPv4 upstream gateway address.
+For a LAN, press <ENTER> for none:
+> 
+
+Enter the new LAN IPv6 address. Press <ENTER> for none:
+>
+
+Do you want to enable the DHCP server on LAN? (y/n) y
+Enter the start address of the IPv4 client address range: 10.10.0.100
+Enter the end address of the IPv4 client address range: 10.10.0.199
+
+Please wait while the changes are saved to LAN...
+
+The IPv4 LAN address has been set to 10.10.0.1/24
+You can now access the webConfigurator by opening the following URL in your web browser:
+        http://10.10.0.1/
+
+Press <ENTER> to continue.
+```
+
+At the pfSense prompt, select 14 to enable the secure shell (sshd):
+
+```bash
+SSHD is currently disabled. Would you like to enable it? [y/n] y
+
+Writing configuration... done.
+
+Enabling SSHD...
+Reloading firewall rules. done.
+```
+
+Extract the list of MAC addresses for all the VMs to create DHCP reservations in pfSense:
+
+```powershell
+Get-VMNetworkAdapter -VMName IT-HELP-* | `
+	Where-Object { $_.SwitchName -eq "LAN Switch" } | `
+	ForEach-Object { [PSCustomObject]@{ VMName = $_.VMName
+	MacAddress = $_.MacAddress -Split '(.{2})' -Match '.' -Join ':' } }
+
+VMName       MacAddress
+------       ----------
+IT-HELP-WAYK 00:15:5D:19:7F:07
+IT-HELP-DC   00:15:5D:19:7F:05
+IT-HELP-DVLS 00:15:5D:19:7F:0B
+```
+
+Open the pfSense web interface (http://10.10.0.1/) and login with the default user "admin" and password "pfsense". Change the default password with a generated one and save it.
+
+In the pfSense menu, select **Services**, go to **DHCP Server**. Make sure that **Enable DHCP server on LAN interface** is checked, and review the following under **General Options**:
+
+ * **Subnet**: 10.10.0.0
+ * **Subnet mask**: 255.255.255.0
+ * **Available range**: 10.10.0.1 - 10.10.0.254
+ * **Range**: from 10.10.0.100 to 10.10.0.199
+
+Under **Server**, set the following DNS servers: 1.1.1.1, 1.0.0.1. This list of DNS servers will be pushed through DHCP automatically.
+
+At the bottom of the page, under **DHCP Static Mappings**, create entries using the MAC addresses extracted earlier:
+
+|MAC Address      |IP Address  |Hostname    |
+|-----------------|------------|------------|
+|00:15:5D:19:7F:05|10.10.0.10  |IT-HELP-DC  |
+|00:15:5D:19:7F:0B|10.10.0.21  |IT-HELP-DVLS|
+|00:15:5D:19:7F:07|10.10.0.22  |IT-HELP-WAYK|
+
+Click **Save**. With the DHCP server configured, there should be no need for static IP configurations in each VM.
+
+In the pfSense menu, select **Services**, go to **Interfaces** then select **WAN**. Review the **Static IPv4 Configuration**:
+
+ * **IPv4 Address**: 10.9.0.2 /24
+ * **IPv4 Upstream gateway**: WANGW - 10.9.0.1
+
+In the pfSense menu, select **Status** then **Gateways**. Make sure that "WANGW" is marked as the default gateway, with IP address 10.9.0.1 and that the status is **Online**. This is very important, otherwise the router VM will not provide internet access in the local network.
+
+In the pfSense menu, select **Services**, go to **Interfaces** then select **LAN**. Review the **Static IPv4 Configuration**:
+
+ * **IPv4 Address**: 10.10.0.1 /24
+ * **IPv4 Upstream gateway**: None
+
+There should be no gateway configuration on the LAN interface, so remove it if you configured one by mistake.
+
 Allow ICMP echo reply (ping) on all VMs and the host:
 
 ```powershell
@@ -273,97 +466,34 @@ New-NetFirewallRule -Name 'ICMPv4' -DisplayName 'ICMPv4' `
     -Protocol ICMPv4 -Program Any -LocalAddress Any -RemoteAddress Any
 ```
 
-For each VM, run `Get-VMNetworkAdapter -VMName IT-HELP` on the host, compare the MAC addresses with the output from the `Get-NetAdapter` command inside the VM, then use the `Rename-NetAdapter` command to rename network interfaces. The most important one is to rename the network adapter attached to the internal network switch to "Ethernet (Internal)" so you don't confuse it.
+Enable RDP for all VMs so you can connect without using the IP address instead of the Hyper-V manager:
 
 ```powershell
-[HYPERV-HOST]: PS > Get-VMNetworkAdapter -VMName IT-HELP-101
-
-Name            IsManagementOs VMName      SwitchName      MacAddress   Status IPAddresses
-----            -------------- ------      ----------      ----------   ------ -----------
-Network Adapter False          IT-HELP-101 Default Switch  00155D000411 {Ok}   {172.30.191.199, fe80::2daa:50cf:2e36:341e}
-Network Adapter False          IT-HELP-101 Internal Switch 00155D000412 {Ok}   {169.254.233.159, fe80::8031:9760:c1e7:e99f}
-Network Adapter False          IT-HELP-101 External Switch 00155D000413 {Ok}   {169.254.7.110, fe80::2514:70d6:4715:76e}
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" –Value 0
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 ```
 
-Look for the last two digits of the MacAddress field to find the matching virtual network adapter:
+Connect to the domain controller VM (IT-HELP-DC) and make sure that it correctly obtained its IP address through DHCP (10.10.0.10) and that DNS can resolve google.com (nslookup google.com).
+
+Install the Active Directory Domain Services feature including the management tools:
 
 ```powershell
-[IT-HELP-101]: PS > Get-NetAdapter
-
-Name                      InterfaceDescription                    ifIndex Status       MacAddress             LinkSpeed
-----                      --------------------                    ------- ------       ----------             ---------
-Ethernet 2                Microsoft Hyper-V Network Adapter #2          9 Up           00-15-5D-00-04-12        10 Gbps
-Ethernet 3                Microsoft Hyper-V Network Adapter #3          7 Up           00-15-5D-00-04-11        10 Gbps
-Ethernet 4                Microsoft Hyper-V Network Adapter #4          3 Up           00-15-5D-00-04-13        40 Gbps
-
-
-[IT-HELP-101]: PS > Rename-NetAdapter -Name "Ethernet 2" -NewName "Ethernet (Internal)"
-[IT-HELP-101]: PS > Rename-NetAdapter -Name "Ethernet 3" -NewName "Ethernet (Default)"
-[IT-HELP-101]: PS > Rename-NetAdapter -Name "Ethernet 4" -NewName "Ethernet (External)"
+Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
 ```
 
-This is a bit painful, but it's worth it because then you won't waste time trying to figure out to which virtual network adapter is attached to what virtual network switch.
-
-Hyper-V Host:
+Create the new Active Directory forest. This a point of no return, so creating a manual Hyper-V checkpoint is recommended. Make sure that the computer name ($Env:ComputerName) is set to "IT-HELP-DC" because it cannot be changed later. Generate a password for the Active Directory safe administrator and use it when prompted by the `Install-ADDSForest` command.
 
 ```powershell
-New-NetIPAddress -IPAddress "10.5.0.1" -InterfaceAlias "Ethernet (Internal)" -AddressFamily IPv4 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet (Internal)" -ServerAddresses "10.5.0.5"
+Install-ADDSForest -DomainName "ad.it-help.ninja" -DomainNetbiosName "IT-HELP" -InstallDNS
 ```
 
-IT-HELP-DC:
+The IT-HELP-DC will reboot to complete the domain controller promotion. The process can take at least 5 minutes to complete, so be patient. The domain controller VM should now become the DNS server used by all other VMs inside the local network, so the pfSense DHCP Server and DNS Resolver configuration need to be updated.
 
-```powershell
-New-NetIPAddress -IPAddress "10.5.0.5" -InterfaceAlias "Ethernet (Internal)" -AddressFamily IPv4 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet (Internal)" -ServerAddresses "10.5.0.5"
-```
+In the pfSense menu, select **Services**, then **DNS Resolver**. Make sure that **Enable DNS Resolver** is unchecked, because pfSense should **not** act as the DNS server.
 
-IT-HELP-SRV1:
-
-```powershell
-New-NetIPAddress -IPAddress "10.5.0.11" -InterfaceAlias "Ethernet (Internal)" -AddressFamily IPv4 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet (Internal)" -ServerAddresses "10.5.0.5"
-```
-
-IT-HELP-SRV2:
-
-```powershell
-New-NetIPAddress -IPAddress "10.5.0.12" -InterfaceAlias "Ethernet (Internal)" -AddressFamily IPv4 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet (Internal)" -ServerAddresses "10.5.0.5"
-```
-
-IT-HELP-101:
-
-```powershell
-New-NetIPAddress -IPAddress "10.5.0.101" -InterfaceAlias "Ethernet (Internal)" -AddressFamily IPv4 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet (Internal)" -ServerAddresses "10.5.0.5"
-```
+In the pfSense menu, select **Services**, then **DHCP Server**. In the **Servers** section, remove the previous list of DNS servers (1.1.1.1, 1.0.0.1) and enter the IP address of the domain controller VM (10.10.0.10 for IT-HELP-DC). All other VMs in the local network will now automatically point to the correct DNS server required for Active Directory to work.
 
 ## Certificate Authority
-
-Create an [offline certificate authority using smallstep](https://smallstep.com/docs/step-cli/basic-crypto-operations#run-an-offline-x509-certificate-authority).
-
-```powershell
-step certificate create "IT-HELP Root CA" `
-    --profile root-ca `
-    root_ca.crt root_ca.key `
-    --kty RSA --size 2048
-```
-
-```powershell
-step certificate create "IT-HELP Intermediate CA" `
-    --profile intermediate-ca `
-    --ca ./root_ca.crt --ca-key ./root_ca.key `
-    intermediate_ca.crt intermediate_ca.key `
-    --kty RSA --size 2048
-```
-
-Convert both certificates to pfx, which is easier to deal with on Windows:
-
-```powershell
-step certificate p12 root_ca.pfx root_ca.crt root_ca.key
-step certificate p12 intermediate_ca.pfx intermediate_ca.crt intermediate_ca.key
-```
 
 Request a new certificate from Active Directory Certificate Services. Start by creating a new file called "cert.inf":
 
