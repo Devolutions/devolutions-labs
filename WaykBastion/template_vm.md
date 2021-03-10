@@ -243,6 +243,32 @@ For each VM, create [Hyper-V differencing disks](https://www.altaro.com/hyper-v/
 
 It is important to understand that the golden image *cannot* be changed once a differencing disk has been created to use it. The new child VHDX file will only contain the bytes that have changed, making it easier to fit a large number of VMs inside constrained storage space.
 
+You can also create the differencing disks in bulk with PowerShell:
+
+```powershell
+$ParentDiskPath = "C:\Hyper-V\Golden Images\Windows Server 2019 Standard.vhdx"
+$VirtualHardDisks = "C:\Hyper-V\Virtual Hard Disks"
+$VMNames = @('IT-HELP-DC', 'IT-HELP-CA', 'IT-HELP-DVLS', 'IT-HELP-SRV1', 'IT-HELP-SRV2')
+foreach ($VMName in $VMNames) {
+    New-VHD -Path "$VirtualHardDisks\$VMName.vhdx" -ParentPath $ParentDiskPath
+}
+```
+
+Create the VMs:
+
+```powershell
+foreach ($VMName in $VMNames) {
+    New-VM -Name $VMName -MemoryStartupBytes 4GB `
+        -VHDPath "$VirtualHardDisks\$VMName.vhdx" `
+        -SwitchName "LAN Switch"
+    
+    Set-VM -Name $VMName `
+        -ProcessorCount 4 `
+        -AutomaticStopAction Shutdown `
+        -CheckpointType Disabled
+}
+```
+
 ### Hyper-V Virtual Switch
 
 In the Hyper-V virtual switch manager, create a new switch called "Internal Switch" using the "Internal Network" connection type. This switch will be used by the Hyper-V host and all the virtual machine guests. For all new virtual machines, click "Add Hardware" and add the internal switch, leaving the default switch for internet access.
@@ -265,18 +291,23 @@ Saving the virtual machine state is also a useful feature in production, but it 
 
 ### Hyper-V Network Configuration
 
-Create a Hyper-V internal adapter that will be used for the LAN between the Hyper-V host and the lab VMs:
+Create a Hyper-V internal switch that will be used for the LAN between the Hyper-V host and the lab VMs:
 
 ```powershell
 New-VMSwitch –SwitchName "LAN Switch" –SwitchType Internal –Verbose
+$NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(LAN Switch)" }
+New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.10.0.5 -PrefixLength 24
+Set-DnsClientServerAddress -InterfaceIndex $NetAdapter.IfIndex -ServerAddresses @()
 ```
+
+It is very important to avoid using DHCP for the network adapter attached to the LAN switch on the host to avoid using the DNS server from the domain controller VM. If DNS resolution becomes suspiciously slow on the host, make sure that the DNS server published through DHCP on this interface is ignored.
 
 [Set up a NAT network](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/user-guide/setup-nat-network). Create a new Hyper-V switch for localhost NAT:
 
 ```powershell
 New-VMSwitch –SwitchName "NAT Switch" –SwitchType Internal –Verbose
 $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(NAT Switch)" }
-New-NetIPAddress -IPAddress 10.9.0.1 -PrefixLength 24 -InterfaceIndex $NetAdapter.IfIndex
+New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.9.0.1 -PrefixLength 24
 New-NetNat –Name NatNetwork –InternalIPInterfaceAddressPrefix 10.9.0.0/24
 ```
 
@@ -418,6 +449,9 @@ Get-VMNetworkAdapter -VMName IT-HELP-* | `
 
 VMName       MacAddress
 ------       ----------
+IT-HELP-CA   00:15:5D:19:7F:11
+IT-HELP-SRV2 00:15:5D:19:7F:10
+IT-HELP-SRV1 00:15:5D:19:7F:0F
 IT-HELP-WAYK 00:15:5D:19:7F:07
 IT-HELP-DC   00:15:5D:19:7F:05
 IT-HELP-DVLS 00:15:5D:19:7F:0B
@@ -439,8 +473,11 @@ At the bottom of the page, under **DHCP Static Mappings**, create entries using 
 |MAC Address      |IP Address  |Hostname    |
 |-----------------|------------|------------|
 |00:15:5D:19:7F:05|10.10.0.10  |IT-HELP-DC  |
+|00:15:5D:19:7F:11|10.10.0.11  |IT-HELP-CA  |
 |00:15:5D:19:7F:0B|10.10.0.21  |IT-HELP-DVLS|
 |00:15:5D:19:7F:07|10.10.0.22  |IT-HELP-WAYK|
+|00:15:5D:19:7F:0F|10.10.0.31  |IT-HELP-SRV1|
+|00:15:5D:19:7F:10|10.10.0.32  |IT-HELP-SRV2|
 
 Click **Save**. With the DHCP server configured, there should be no need for static IP configurations in each VM.
 
@@ -473,25 +510,13 @@ Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" 
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 ```
 
-Connect to the domain controller VM (IT-HELP-DC) and make sure that it correctly obtained its IP address through DHCP (10.10.0.10) and that DNS can resolve google.com (nslookup google.com).
+Configure the [IT-HELP-DC domain controller VM](IT-HELP-DC.md) before going any further.
 
-Install the Active Directory Domain Services feature including the management tools:
-
-```powershell
-Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
-```
-
-Create the new Active Directory forest. This a point of no return, so creating a manual Hyper-V checkpoint is recommended. Make sure that the computer name ($Env:ComputerName) is set to "IT-HELP-DC" because it cannot be changed later. Generate a password for the Active Directory safe administrator and use it when prompted by the `Install-ADDSForest` command.
+Start the other VMs, rename them using `Rename-Computer`, then join them to the new domain. You will be prompted for the domain admin credentials:
 
 ```powershell
-Install-ADDSForest -DomainName "ad.it-help.ninja" -DomainNetbiosName "IT-HELP" -InstallDNS
+Add-Computer -DomainName "ad.it-help.ninja" -Restart
 ```
-
-The IT-HELP-DC will reboot to complete the domain controller promotion. The process can take at least 5 minutes to complete, so be patient. The domain controller VM should now become the DNS server used by all other VMs inside the local network, so the pfSense DHCP Server and DNS Resolver configuration need to be updated.
-
-In the pfSense menu, select **Services**, then **DNS Resolver**. Make sure that **Enable DNS Resolver** is unchecked, because pfSense should **not** act as the DNS server.
-
-In the pfSense menu, select **Services**, then **DHCP Server**. In the **Servers** section, remove the previous list of DNS servers (1.1.1.1, 1.0.0.1) and enter the IP address of the domain controller VM (10.10.0.10 for IT-HELP-DC). All other VMs in the local network will now automatically point to the correct DNS server required for Active Directory to work.
 
 ## Certificate Authority
 
