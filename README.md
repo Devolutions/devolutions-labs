@@ -125,40 +125,6 @@ Reboot (required for Docker, Hyper-V, OpenSSH, IIS):
 Restart-Computer
 ```
 
-## IIS (Windows Server)
-
-Open an elevated Windows PowerShell prompt:
-
-Install IIS features:
-
-```powershell
-$Features = @(
-    'Web-Server',
-    'Web-WebSockets',
-    'Web-Mgmt-Tools')
-
-foreach ($Feature in $Features) {
-    Install-WindowsFeature -Name $Feature
-}
-```
-
-Install IIS URL Rewrite and Application Request Routing (ARR) modules:
-
-```powershell
-choco install -y urlrewrite
-choco install -y iis-arr
-```
-
-Change default IIS configuration settings:
-
-```powershell
-& "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
-    -section:system.webServer/proxy -preserveHostHeader:true /commit:apphost
-
-& "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
-    -section:system.WebServer/rewrite/globalRules -useOriginalURLEncoding:false /commit:apphost
-```
-
 Open an elevated PowerShell 7 prompt:
 
 Enable PowerShell remoting over SSH:
@@ -263,7 +229,7 @@ You can also create the differencing disks in bulk with PowerShell:
 ```powershell
 $ParentDiskPath = "C:\Hyper-V\Golden Images\Windows Server 2019 Standard.vhdx"
 $VirtualHardDisks = "C:\Hyper-V\Virtual Hard Disks"
-$VMNames = @('IT-HELP-DC', 'IT-HELP-CA', 'IT-HELP-DVLS', 'IT-HELP-SRV1', 'IT-HELP-SRV2')
+$VMNames = @('IT-HELP-DC', 'IT-HELP-CA', 'IT-HELP-DVLS', 'IT-HELP-WAYK', 'IT-HELP-GW', 'IT-HELP-WEB')
 foreach ($VMName in $VMNames) {
     New-VHD -Path "$VirtualHardDisks\$VMName.vhdx" -ParentPath $ParentDiskPath
 }

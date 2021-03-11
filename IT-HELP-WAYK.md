@@ -1,5 +1,8 @@
-
 # IT-HELP-WAYK VM
+
+```powershell
+Add-Computer -DomainName "ad.it-help.ninja" -NewName "IT-HELP-WAYK" -Restart
+```
 
 ## Prerequisites
 
@@ -104,7 +107,73 @@ Congratulations, you now have access to the Wayk Bastion management interface! W
 
 ## Secure External Access
 
+Add a new DNS 'A' record in Active Directory for "bastion" pointing to the machine hosting Wayk Bastion (IT-HELP-WAYK):
+
+```powershell
+Add-DnsServerResourceRecordA -Name "bastion" -ZoneName "ad.it-help.ninja" -AllowUpdateAny -IPv4Address "10.10.0.22"
+```
+
+Import a certificate emitted by a trusted certificate authority (use Active Directory Certificate Services) for "bastion.ad.it-help.ninja". Follow the instructions from the [IT-HELP-CA](IT-HELP-CA.md) certificate authority VM to generate the certificate.
+
+```powershell
+Import-WaykBastionCertificate -CertificateFile ".\bastion.ad.it-help.ninja.pfx" -Password "cert123!"
+```
+
+Reconfigure the Wayk Bastion listener and external URLs:
+
+```powershell
+Set-WaykBastionConfig -ListenerUrl "https://localhost:443" -ExternalUrl "https://bastion.ad.it-help.ninja"
+```
+
+The **-ListenerUrl** parameter becomes "https://localhost:443", which means "listen in HTTPS on port 443". Importing a certificate does not automatically enable HTTPS, so make sure to use "https://" instead of "http://" if the intent is to listen in HTTPS.
+
+The **-ExternalUrl** parameter becomes "https://bastion.ad.it-help.ninja". It is *very* important to access Wayk Bastion through this URL only: using the IP address or a different hostname will result in a broken page that loads partially.
+
+Restart Wayk Bastion to apply the configuration changes:
+
+```powershell
+Restart-WaykBastion
+```
+
+Open "https://bastion.ad.it-help.ninja" in a browser from one of the domain-joined VMs. The Wayk Bastion web interface should load without warnings over HTTPS. Automatic certificate validation is mandatory for Wayk Client and Wayk Agent. If certificate validation fails, review the instructions from the [IT-HELP-CA certificate authority VM](IT-HELP-CA.md).
+
 ## Wayk Agent Deployment
+
+In Wayk Bastion, under **Settings** go to **Machine Registration**. Click on the "+" button at the top right of the screen, then click **Generate** to generate a new token. The new token id can be used to register machines automatically to Wayk Bastion.
+
+Run the following commands on the **IT-HELP-GW** and **IT-HELP-WEB** virtual machines to:
+ * Install the **WaykAgent** PowerShell module
+ * Install quietly Wayk Agent unattended
+ * Register Wayk Agent with Wayk Bastion
+
+```powershell
+Install-Module -Name WaykAgent -Force
+Import-Module -Name WaykAgent
+Install-WaykAgent -Quiet
+$TokenId = "9390e88d-d9df-46ed-a821-4ddef1de0d70"
+$BastionUrl = "https://bastion.ad.it-help.ninja"
+Register-WaykAgent -DenUrl $BastionUrl -TokenId $TokenId
+```
+
+The new machines managed by Wayk Agent and registered in Wayk Bastion should now be visible in the **Machines** section of the web interface. For advanced deployment options (.msi installer, custom executable) [refer to the documentation](https://docs.devolutions.net/wayk/bastion/deployment-automation.html).
 
 ## Wayk Client Connection
 
+In Wayk Bastion, [add a new license and assign it to a user](https://docs.devolutions.net/wayk/bastion/license-management.html).
+
+On **IT-HELP-WAYK**, install Wayk Client and configure it to use the correct Wayk Bastion URL:
+
+```powershell
+Install-Module -Name WaykClient -Force
+Import-Module -Name WaykClient
+Install-WaykClient -Quiet
+Set-WaykClientConfig -DenUrl "https://bastion.ad.it-help.ninja"
+```
+
+Launch Wayk Client, then go in **File**, then **Options**. In the **Connectivity** tab, make sure that the Wayk Bastion URL is set to "https://bastion.ad.it-help.ninja", then click **Login**. The Wayk Bastion login page will be opened with the default system browser, login using the technician user with an assigned license.
+
+In the Wayk Bastion web interface, go to the **Machines** section and select the **IT-HELP-GW** virtual machine. At the top right of the screen, click the **Connect** button, then select **Desktop Client**.
+
+When prompted to open wayk:// links using Wayk Client, simply accept. The Wayk Client program should now initiate the connection to **IT-HELP-GW** and prompt for a system username and password. Use the previously configured Administrator account for now to connect.
+
+Voila! You just made your first connection using Wayk Bastion.

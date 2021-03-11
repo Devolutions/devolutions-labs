@@ -1,10 +1,34 @@
 # IT-HELP-CA VM
 
+## Creating Certificate Authority
+
 Rename the computer and join it to the domain:
 
 ```powershell
 Add-Computer -DomainName "ad.it-help.ninja" -NewName "IT-HELP-CA" -Restart
 ```
+
+Install Active Directory Certificate Services (AD CS):
+
+```powershell
+Install-WindowsFeature -Name AD-Certificate -IncludeManagementTools
+```
+
+```powershell
+Install-AdcsCertificationAuthority -CAType EnterpriseRootCa `
+    -CryptoProviderName "RSA#Microsoft Software Key Storage Provider" `
+    -KeyLength 2048 -HashAlgorithmName SHA256
+```
+
+Force a group policy update to update the trusted root CA certificates in Active Directory:
+
+```powershell
+gpupdate /force
+```
+
+Firefox does not trust the system trusted root CA certificates by default and [needs to be configured to trust them](https://support.mozilla.org/en-US/kb/setting-certificate-authorities-firefox).
+
+## Requesting Wayk Bastion Certificate
 
 Request a new certificate from Active Directory Certificate Services. Start by creating a new file called "cert.inf":
 
@@ -50,10 +74,10 @@ certreq.exe -accept cert.cer
 Export the new certificate including the private key in .pfx format:
 
 ```powershell
-PS > $Certificate = Get-ChildItem "cert:\LocalMachine\My" | `
+$Certificate = Get-ChildItem "cert:\LocalMachine\My" | `
     Where-Object { $_.Subject -eq "CN=bastion.ad.it-help.ninja" } | Select-Object -First 1
-PS > $Password = ConvertTo-SecureString -String "cert123!" -Force -AsPlainText
-PS > Export-PfxCertificate -Cert $Certificate -ChainOption BuildChain -FilePath ".\cert.pfx" -Password $Password
+$Password = ConvertTo-SecureString -String "cert123!" -Force -AsPlainText
+Export-PfxCertificate -Cert $Certificate -ChainOption BuildChain -FilePath ".\cert.pfx" -Password $Password
 ```
 
 Once the certificate is exported, it can be removed from the certificate store:

@@ -158,12 +158,12 @@ Get-VMNetworkAdapter -VMName IT-HELP-* | `
 
 VMName       MacAddress
 ------       ----------
-IT-HELP-CA   00:15:5D:19:7F:11
-IT-HELP-SRV2 00:15:5D:19:7F:10
-IT-HELP-SRV1 00:15:5D:19:7F:0F
-IT-HELP-WAYK 00:15:5D:19:7F:07
 IT-HELP-DC   00:15:5D:19:7F:05
+IT-HELP-CA   00:15:5D:19:7F:11
 IT-HELP-DVLS 00:15:5D:19:7F:0B
+IT-HELP-WAYK 00:15:5D:19:7F:07
+IT-HELP-GW   00:15:5D:19:7F:0F
+IT-HELP-WEB  00:15:5D:19:7F:10
 ```
 
 Open the pfSense web interface (http://10.10.0.1/) and login with the default user "admin" and password "pfsense". Change the default password with a generated one and save it.
@@ -185,8 +185,8 @@ At the bottom of the page, under **DHCP Static Mappings**, create entries using 
 |00:15:5D:19:7F:11|10.10.0.11  |IT-HELP-CA  |
 |00:15:5D:19:7F:0B|10.10.0.21  |IT-HELP-DVLS|
 |00:15:5D:19:7F:07|10.10.0.22  |IT-HELP-WAYK|
-|00:15:5D:19:7F:0F|10.10.0.31  |IT-HELP-SRV1|
-|00:15:5D:19:7F:10|10.10.0.32  |IT-HELP-SRV2|
+|00:15:5D:19:7F:0F|10.10.0.31  |IT-HELP-GW  |
+|00:15:5D:19:7F:10|10.10.0.32  |IT-HELP-WEB |
 
 Click **Save**. With the DHCP server configured, there should be no need for static IP configurations in each VM.
 
