@@ -2,6 +2,12 @@
 
 Connect to the domain controller VM (IT-HELP-DC) and make sure that it correctly obtained its IP address through DHCP (10.10.0.10) and that DNS can resolve google.com (nslookup google.com).
 
+Rename the computer to IT-HELP-DC:
+
+```powershell
+Rename-Computer -NewName "IT-HELP-DC"
+```
+
 Install the Active Directory Domain Services feature including the management tools:
 
 ```powershell
