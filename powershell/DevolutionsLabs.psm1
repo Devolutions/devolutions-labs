@@ -70,6 +70,7 @@ function New-DLabVM
 
     if ([bool]$(Get-VM $Name)) {
         if ($Force) {
+            Stop-VM $Name -Force
             Remove-VM $Name
         } else {
             throw "VM `"$Name`" already exists!"
@@ -182,4 +183,126 @@ function New-DLabAnswerFile
     }
 
     $answer.Save($Path)
+}
+
+function New-DLabVMSession
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [string] $UserName = "Administrator",
+        [string] $DomainName = ".\",
+        [string] $Password
+    )
+
+    if ([string]::IsNullOrEmpty($Password)) {
+    	$Credential = Get-Credential -UserName $UserName
+    	if ($PSEdition -eq 'Desktop') {
+	        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
+	        $Password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+	    } else {
+	        $Password = ConvertFrom-SecureString -SecureString $SecureString -AsPlainText
+	    }
+    } else {
+	    $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+		$Credential = New-Object System.Management.Automation.PSCredential @($UserName, $SecurePassword)
+    }
+
+    New-PSSession -VMName $VMName -Credential $Credential
+}
+
+function Set-DLabVMNetAdapter
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession,
+        [Parameter(Mandatory=$true)]
+        [string] $SwitchName,
+        [Parameter(Mandatory=$true)]
+        [string] $NetAdapterName,
+        [Parameter(Mandatory=$true)]
+        [string] $IPAddress,
+        [Parameter(Mandatory=$true)]
+        [string] $DnsServerAddress
+    )
+
+    $VMHostAdapters = Get-VMNetworkAdapter $VMName
+    $Switch = $VMHostAdapters | Where-Object { $_.SwitchName -eq $SwitchName }
+    $MacAddress = $Switch.MacAddress -Split '(.{2})' -Match '.' -Join '-'
+
+    Invoke-Command -ScriptBlock { Param($MacAddress, $NetAdapterName, $IPAddress, $DnsServerAddress)
+        $NetAdapter = Get-NetAdapter | Where-Object { $_.MacAddress -Like $MacAddress }
+        Rename-NetAdapter -Name $NetAdapter.Name -NewName $NetAdapterName
+        New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NetAdapterName -AddressFamily IPv4 -PrefixLength 24
+        Set-DnsClientServerAddress -InterfaceAlias $NetAdapterName -ServerAddresses $DnsServerAddress
+    } -Session $VMSession -ArgumentList @($MacAddress, $NetAdapterName, $IPAddress, $DnsServerAddress)
+}
+
+function Add-DLabVMToDomain
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession,
+        [Parameter(Mandatory=$true)]
+        [string] $DomainName,
+        [Parameter(Mandatory=$true)]
+        [string] $UserName,
+        [Parameter(Mandatory=$true)]
+        [string] $Password
+    )
+
+    Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password)
+        $ConfirmPreference = "High"
+        $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+        $Credential = New-Object System.Management.Automation.PSCredential @($UserName, $SecurePassword)
+        Add-Computer -DomainName $DomainName -Credential $Credential -Restart
+    } -Session $VMSession -ArgumentList @($DomainName, $UserName, $Password)
+}
+
+function Set-DLabVMAutologon
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [string] $UserName,
+        [string] $DomainName = ".\",
+        [Parameter(Mandatory=$true)]
+        [string] $Password,
+        [switch] $Restart
+    )
+
+    if ([string]::IsNullOrEmpty($Password)) {
+    	$Credential = Get-Credential -UserName $UserName
+    	if ($PSEdition -eq 'Desktop') {
+	        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
+	        $Password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+	    } else {
+	        $Password = ConvertFrom-SecureString -SecureString $SecureString -AsPlainText
+	    }
+    } else {
+	    $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+		$Credential = New-Object System.Management.Automation.PSCredential @($UserName, $SecurePassword)
+    }
+
+    $VMSession = New-PSSession -VMName $VMName -Credential $Credential
+
+    Invoke-Command -ScriptBlock { Param($UserName, $DomainName, $Password, [bool] $Restart)
+        $WinlogonRegPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
+        New-ItemProperty -Path $WinlogonRegPath -Name AutoAdminLogon -Value 1 -PropertyType DWORD -Force | Out-Null
+        New-ItemProperty -Path $WinlogonRegPath -Name ForceAutoLogon -Value 0 -PropertyType DWORD -Force | Out-Null
+        New-ItemProperty -Path $WinlogonRegPath -Name DefaultUserName -Value $Username -PropertyType String -Force | Out-Null
+        New-ItemProperty -Path $WinlogonRegPath -Name DefaultPassword -Value $Password -PropertyType String -Force | Out-Null
+        if ($Restart) {
+            Restart-Computer -Force
+        }
+    } -Session $VMSession -ArgumentList @($UserName, $DomainName, $Password, $Restart)
 }
