@@ -15,6 +15,9 @@ $DomainName = "ad.it-yolo.ninja"
 $DomainNetbiosName = "IT-YOLO"
 $SafeModeAdministratorPassword = "SafeMode123!"
 
+$CACommonName = "IT-YOLO-CA"
+$CAHostName = "IT-YOLO-CA.$DomainName"
+
 $DomainUserName = "$DomainNetbiosName\Administrator"
 $DomainPassword = $Password
 
@@ -75,7 +78,7 @@ $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $Doma
 
 # Install Active Directory Certificate Services
 
-Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password)
+Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommonName)
     $ConfirmPreference = "High"
     Install-WindowsFeature -Name AD-Certificate -IncludeManagementTools
     $Params = @{
@@ -83,9 +86,10 @@ Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password)
         CryptoProviderName = "RSA#Microsoft Software Key Storage Provider";
         HashAlgorithmName = "SHA256";
         KeyLength = 2048;
+        CACommonName = $CACommonName;
     }
     Install-AdcsCertificationAuthority @Params -Force
-} -Session $VMSession -ArgumentList @($DomainName, $DomainUserName, $DomainPassword)
+} -Session $VMSession -ArgumentList @($DomainName, $DomainUserName, $DomainPassword, $CACommonName)
 
 # IT-YOLO-WAYK
 
@@ -143,6 +147,30 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
+
+$BastionHostName = "bastion.$DomainName"
+$CertificateFile = "~\Documents\cert.pfx"
+$CertificatePassword = "cert123!"
+
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress)
+    Install-WindowsFeature RSAT-DNS-Server
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny
+} -Session $VMSession -ArgumentList @("bastion", $DomainName, $IPAddress)
+
+Request-DLabCertificate $VMName -VMSession $VMSession `
+    -CommonName $BastionHostName `
+    -CAHostName $CAHostName -CACommonName $CACommonName `
+    -CertificateFile $CertificateFile -Password $CertificatePassword
+
+Invoke-Command -ScriptBlock { Param($ExternalHost, $CertificateFile, $CertificatePassword)
+    Import-Module -Name WaykBastion
+    Import-WaykBastionCertificate -CertificateFile $CertificateFile -Password $CertificatePassword
+    $Params = @{
+        ListenerUrl = "https://localhost:443";
+        ExternalUrl = "https://${ExternalHost}`:443";
+    }
+    Set-WaykBastionConfig @Params
+} -Session $VMSession -ArgumentList @($BastionHostName, $CertificateFile, $CertificatePassword)
 
 # IT-YOLO-DVLS
 

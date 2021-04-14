@@ -275,6 +275,93 @@ function Add-DLabVMToDomain
     } -Session $VMSession -ArgumentList @($DomainName, $UserName, $Password)
 }
 
+function Request-DLabCertificate
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession,
+        [Parameter(Mandatory=$true)]
+        [string] $CommonName,
+        [int] $KeyLength = 2048,
+        [Parameter(Mandatory=$true)]
+        [string] $CACommonName,
+        [Parameter(Mandatory=$true)]
+        [string] $CAHostName,
+        [Parameter(Mandatory=$true)]
+        [string] $CertificateFile,
+        [Parameter(Mandatory=$true)]
+        [string] $Password
+    )
+
+    Invoke-Command -ScriptBlock { Param($CommonName, $KeyLength,
+        $CAHostName, $CACommonName, $CertificateFile, $Password)
+    
+        $CertInf = @"
+[NewRequest]
+Subject = "CN=$CommonName"
+Exportable = TRUE
+KeyLength = $KeyLength
+KeySpec = 1
+KeyUsage = 0xA0
+MachineKeySet = TRUE
+
+[RequestAttributes]
+CertificateTemplate = "WebServer"
+
+[EnhancedKeyUsageExtension]
+OID = 1.3.6.1.5.5.7.3.1 ; Server Authentication
+OID = 1.3.6.1.5.5.7.3.2 ; Client Authentication
+
+[Extensions]
+2.5.29.17 = "{text}"; Subject Alternative Names (SANs)
+_continue_ = "dns=$CommonName&"
+"@
+
+        $TempPath = Join-Path $([System.IO.Path]::GetTempPath()) "certreq-$CommonName"
+        Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+        New-Item -ItemType Directory -Path $TempPath -ErrorAction SilentlyContinue | Out-Null
+
+        $TempInfFile = $(Join-Path $TempPath 'cert.inf')
+        $TempCsrFile = $(Join-Path $TempPath 'cert.csr')
+        $TempCerFile = $(Join-Path $TempPath 'cert.cer')
+        $TempRspFile = $(Join-Path $TempPath 'cert.rsp')
+
+        Set-Content -Path $TempInfFile -Value $CertInf
+
+        & 'certreq.exe' '-q' '-new' $TempInfFile $TempCsrFile
+
+        $CAConfigName = "$CAHostName\$CACommonName"
+        & 'certreq.exe' '-q' '-submit' '-config' $CAConfigName $TempCsrFile $TempCerFile
+
+        & 'certreq.exe' '-q' '-accept' $TempCerFile
+
+        $Certificate = Get-ChildItem "cert:\LocalMachine\My" |
+            Where-Object { $_.Subject -eq "CN=$CommonName" } | Select-Object -First 1
+    
+        $SecurePassword = ConvertTo-SecureString -String $Password -Force -AsPlainText
+
+        $Params = @{
+            Cert = $Certificate;
+            ChainOption = "BuildChain";
+            FilePath = $CertificateFile;
+            Password = $SecurePassword;
+        }
+
+        Export-PfxCertificate @Params
+        
+        Get-ChildItem "cert:\LocalMachine\My" |
+            Where-Object { $_.Subject -eq "CN=$CommonName" } |
+            Remove-Item
+
+        Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+
+    } -Session $VMSession -ArgumentList @($CommonName, $KeyLength,
+        $CAHostName, $CACommonName, $CertificateFile, $Password)
+}
+
 function Set-DLabVMAutologon
 {
     [CmdletBinding()]
