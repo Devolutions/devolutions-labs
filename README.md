@@ -229,7 +229,7 @@ You can also create the differencing disks in bulk with PowerShell:
 ```powershell
 $ParentDiskPath = "C:\Hyper-V\Golden Images\Windows Server 2019 Standard.vhdx"
 $VirtualHardDisks = "C:\Hyper-V\Virtual Hard Disks"
-$VMNames = @('IT-HELP-DC', 'IT-HELP-CA', 'IT-HELP-DVLS', 'IT-HELP-WAYK', 'IT-HELP-GW', 'IT-HELP-WEB')
+$VMNames = @('IT-HELP-DC', 'IT-HELP-CA', 'IT-HELP-WAYK', 'IT-HELP-DVLS')
 foreach ($VMName in $VMNames) {
     New-VHD -Path "$VirtualHardDisks\$VMName.vhdx" -ParentPath $ParentDiskPath
 }

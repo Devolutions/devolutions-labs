@@ -227,6 +227,8 @@ function Set-DLabVMNetAdapter
         [Parameter(Mandatory=$true)]
         [string] $IPAddress,
         [Parameter(Mandatory=$true)]
+        [string] $DefaultGateway,
+        [Parameter(Mandatory=$true)]
         [string] $DnsServerAddress
     )
 
@@ -237,7 +239,14 @@ function Set-DLabVMNetAdapter
     Invoke-Command -ScriptBlock { Param($MacAddress, $NetAdapterName, $IPAddress, $DnsServerAddress)
         $NetAdapter = Get-NetAdapter | Where-Object { $_.MacAddress -Like $MacAddress }
         Rename-NetAdapter -Name $NetAdapter.Name -NewName $NetAdapterName
-        New-NetIPAddress -IPAddress $IPAddress -InterfaceAlias $NetAdapterName -AddressFamily IPv4 -PrefixLength 24
+        $Params = @{
+            IPAddress = $IPAddress;
+            InterfaceAlias = $NetAdapterName;
+            AddressFamily = "IPv4";
+            PrefixLength = 24;
+            DefaultGateway = $DefaultGateway;
+        }
+        New-NetIPAddress @Params
         Set-DnsClientServerAddress -InterfaceAlias $NetAdapterName -ServerAddresses $DnsServerAddress
     } -Session $VMSession -ArgumentList @($MacAddress, $NetAdapterName, $IPAddress, $DnsServerAddress)
 }
