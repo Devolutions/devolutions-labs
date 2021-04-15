@@ -44,3 +44,9 @@ Change default IIS configuration settings:
 & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
     -section:system.WebServer/rewrite/globalRules -useOriginalURLEncoding:false /commit:apphost
 ```
+
+Install SQL Server 2019 Express:
+
+```powershell
+choco install -y sql-server-express
+```

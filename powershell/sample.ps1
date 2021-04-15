@@ -227,3 +227,7 @@ Invoke-Command -ScriptBlock {
     & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
         -section:system.WebServer/rewrite/globalRules -useOriginalURLEncoding:false /commit:apphost
 } -Session $VMSession
+
+Invoke-Command -ScriptBlock {
+    choco install -y sql-server-express
+} -Session $VMSession

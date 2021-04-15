@@ -61,7 +61,20 @@ Install Windows Terminal (Windows 10 only):
 choco install -y microsoft-windows-terminal
 ```
 
+Make firefox accept enterprise root CAs:
+
+```powershell
+$RegPath = "HKLM:\Software\Policies\Mozilla\Firefox\Certificates"
+New-Item -Path $RegPath -Force | Out-Null
+New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
+```
+
 Install PowerShell modules:
+
+```powershell
+Install-Module Microsoft.PowerShell.SecretManagement -Scope AllUsers
+Install-Module Microsoft.PowerShell.SecretStore -Scope AllUsers
+```
 
 ```powershell
 Install-Module RdmHelper -Scope AllUsers

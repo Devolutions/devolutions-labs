@@ -105,7 +105,7 @@ function New-DLabVM
     $Params = @{
         Name = $Name;
         VHDPath = $ChildDisk.Path;
-        MemoryStartupBytes = "4GB";
+        MemoryStartupBytes = 4GB;
         SwitchName = "LAN Switch";
     }
 
