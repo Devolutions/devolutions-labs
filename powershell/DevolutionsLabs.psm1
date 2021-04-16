@@ -26,6 +26,64 @@ function Get-DLabPath
     }
 }
 
+function Get-DLabIsoFilePath
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name
+    )
+
+    $IsoPath = Get-DLabPath "ISOs"
+    $(Get-ChildItem -Path $IsoPath "*$Name*.iso" | Sort-Object LastWriteTime -Descending)[0]
+}
+
+function Get-DLabParentDiskFilePath
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name
+    )
+
+    $ParentDisksPath = Get-DLabPath "ParentDisks"
+    $(Get-ChildItem -Path $ParentDisksPath "*$Name*.vhdx" | Sort-Object LastWriteTime -Descending)[0]
+}
+
+function New-DLabParentDisk
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name,
+        [UInt64] $DiskSize,
+        [switch] $Force
+    )
+
+    $ParentDisksPath = Get-DLabPath "ParentDisks"
+    $ParentDiskFileName = $Name, 'vhdx' -Join '.'
+    $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
+
+    if (Test-Path $ParentDiskPath -PathType 'Leaf') {
+        if ($Force) {
+            Remove-Item -Path $ParentDiskPath
+        } else {
+            throw "`"$ParentDiskPath`" already exists!"
+        }
+    }
+
+    $Params = @{
+        Path = $ParentDiskPath;
+        Dynamic = $true;
+    }
+
+    if ($PSBoundParameters.ContainsKey('DiskSize')) {
+        $Params['SizeBytes'] = $DiskSize;
+    }
+
+    New-VHD @Params
+}
+
 function New-DLabChildDisk
 {
     [CmdletBinding()]
@@ -35,9 +93,7 @@ function New-DLabChildDisk
         [switch] $Force
     )
 
-    $ParentDisksPath = Get-DLabPath "ParentDisks"
-    $ParentDiskFileName = "Windows Server 2019 Standard", 'vhdx' -Join '.'
-    $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
+    $ParentDiskPath = Get-DLabParentDiskFilePath "Windows Server 2019 Standard"
 
     if (-Not (Test-Path $ParentDiskPath -PathType 'Leaf')) {
         throw "`"$ParentDiskPath`" cannot be found"
@@ -55,7 +111,67 @@ function New-DLabChildDisk
         }
     }
 
-    New-VHD -Path $ChildDiskPath -ParentPath $ParentDiskPath
+    New-VHD -Path $ChildDiskPath -ParentPath $ParentDiskPath -Differencing
+}
+
+function Test-DLabVM
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name
+    )
+
+    [bool]$(Get-VM $Name -ErrorAction SilentlyContinue)
+}
+
+function New-DLabParentVM
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name,
+        [string] $Password,
+        [string] $SwitchName,
+        [UInt64] $DiskSize = 128GB,
+        [switch] $Force
+    )
+
+    if (Test-DLabVM $Name) {
+        if ($Force) {
+            Stop-VM $Name -Force
+            Remove-VM $Name
+        } else {
+            throw "VM `"$Name`" already exists!"
+        }
+    }
+
+    $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_2019").FullName
+
+    $ParentDisk = New-DLabParentDisk $Name -DiskSize $DiskSize -Force:$Force
+
+    $Params = @{
+        Name = $Name;
+        VHDPath = $ParentDisk.Path;
+        MemoryStartupBytes = 4GB;
+    }
+
+    if ($SwitchName) {
+        $Params['SwitchName'] = $SwitchName;
+    }
+
+    New-VM @Params
+
+    Set-VMDvdDrive -VMName $Name -ControllerNumber 1 -Path $IsoFilePath
+
+    $Params = @{
+        Name = $Name;
+        ProcessorCount = 4;
+        AutomaticStopAction = "Shutdown";
+        CheckpointType = "Disabled";
+    }
+
+    Set-VM @Params
 }
 
 function New-DLabVM
@@ -68,7 +184,7 @@ function New-DLabVM
         [switch] $Force
     )
 
-    if ([bool]$(Get-VM $Name)) {
+    if (Test-DLabVM $Name) {
         if ($Force) {
             Stop-VM $Name -Force
             Remove-VM $Name

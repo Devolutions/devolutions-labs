@@ -296,3 +296,5 @@ Add-Computer -DomainName "ad.it-help.ninja" -NewName "IT-HELP-CA" -Restart
 Configure the [IT-HELP-CA certificate authority VM](IT-HELP-CA.md).
 
 Configure the [IT-HELP-WAYK Wayk Bastion VM](IT-HELP-WAYK.md).
+
+Configure the [IT-HELP-DVLS Devolutions Server VM](IT-HELP-DVLS.md).
