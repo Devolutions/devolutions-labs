@@ -17,7 +17,8 @@ Install-WindowsFeature -Name AD-Certificate -IncludeManagementTools
 ```powershell
 Install-AdcsCertificationAuthority -CAType EnterpriseRootCa `
     -CryptoProviderName "RSA#Microsoft Software Key Storage Provider" `
-    -KeyLength 2048 -HashAlgorithmName SHA256
+    -KeyLength 2048 -HashAlgorithmName SHA256 `
+    -CACommonName "IT-HELP-CA"
 ```
 
 Force a group policy update to update the trusted root CA certificates in Active Directory:
