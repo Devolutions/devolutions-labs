@@ -301,12 +301,58 @@ function New-DLabAnswerFile
     $answer.Save($Path)
 }
 
-function New-DLabVMSession
+function Start-DLabVM
 {
     [CmdletBinding()]
 	param(
         [Parameter(Mandatory=$true,Position=0)]
         [string] $VMName,
+        [string] $UserName,
+        [string] $Password,
+        [int] $Timeout = 60,
+        [switch] $Force
+    )
+
+    if (-Not $(Test-DLabVM $VMName)) {
+        throw "VM `"$VMName`" does not exist"
+    }
+
+    Start-VM $VMName
+}
+
+function Wait-DLabVM
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true,Position=1)]
+        [ValidateSet("Heartbeat","IPAddress","Reboot","MemoryOperations","PSDirect")]
+        [string] $Condition,
+        [string] $UserName,
+        [string] $Password,
+        [int] $Timeout = 60,
+        [switch] $Force
+    )
+
+    if (-Not $(Test-DLabVM $VMName)) {
+        throw "VM `"$VMName`" does not exist"
+    }
+
+    if ($Condition -eq 'PSDirect') {
+        $Credential = Get-DLabCredential -UserName $UserName -Password $Password
+        while ((Invoke-Command -VMName $VMName -Credential $Credential `
+            { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 1 }
+    } else {
+        Wait-VM $VMName -For $Condition -Timeout $Timeout
+    }
+}
+
+function Get-DLabCredential
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
         [string] $UserName = "Administrator",
         [string] $DomainName = ".\",
         [string] $Password
@@ -324,6 +370,22 @@ function New-DLabVMSession
 	    $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
 		$Credential = New-Object System.Management.Automation.PSCredential @($UserName, $SecurePassword)
     }
+
+    $Credential
+}
+
+function New-DLabVMSession
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [string] $UserName = "Administrator",
+        [string] $DomainName = ".\",
+        [string] $Password
+    )
+
+    $Credential = Get-DLabCredential -UserName $UserName -DomainName $DomainName -Password $Password
 
     New-PSSession -VMName $VMName -Credential $Credential
 }
@@ -352,7 +414,8 @@ function Set-DLabVMNetAdapter
     $Switch = $VMHostAdapters | Where-Object { $_.SwitchName -eq $SwitchName }
     $MacAddress = $Switch.MacAddress -Split '(.{2})' -Match '.' -Join '-'
 
-    Invoke-Command -ScriptBlock { Param($MacAddress, $NetAdapterName, $IPAddress, $DnsServerAddress)
+    Invoke-Command -ScriptBlock { Param($MacAddress, $NetAdapterName,
+        $IPAddress, $DefaultGateway, $DnsServerAddress)
         $NetAdapter = Get-NetAdapter | Where-Object { $_.MacAddress -Like $MacAddress }
         Rename-NetAdapter -Name $NetAdapter.Name -NewName $NetAdapterName
         $Params = @{
@@ -364,7 +427,8 @@ function Set-DLabVMNetAdapter
         }
         New-NetIPAddress @Params
         Set-DnsClientServerAddress -InterfaceAlias $NetAdapterName -ServerAddresses $DnsServerAddress
-    } -Session $VMSession -ArgumentList @($MacAddress, $NetAdapterName, $IPAddress, $DnsServerAddress)
+    } -Session $VMSession -ArgumentList @($MacAddress, $NetAdapterName,
+        $IPAddress, $DefaultGateway, $DnsServerAddress)
 }
 
 function Add-DLabVMToDomain

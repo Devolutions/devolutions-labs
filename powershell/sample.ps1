@@ -30,9 +30,9 @@ $DnsServerAddress = $IPAddress
 $DnsServerForwarder = "1.1.1.1"
 
 New-DLabVM $VMName -Password $Password -Force
-Start-VM $VMName
-Wait-VM $VMName -For IPAddress -Timeout 60
+Start-DLabVM $VMName
 
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -47,8 +47,10 @@ Invoke-Command -ScriptBlock { Param($DomainName, $DomainNetbiosName, $SafeModeAd
         -SafeModeAdministratorPassword $SafeModeAdministratorPassword -Force
 } -Session $VMSession -ArgumentList @($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
 
-# wait a good 5-10 minutes for the domain controller promotion to complete
+# wait a good 5-10 minutes for the domain controller promotion to complete after reboot
 
+Wait-DLabVM $VMName 'Reboot' -Timeout 120
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
 # IT-YOLO-CA
@@ -57,9 +59,9 @@ $VMName = "IT-YOLO-CA"
 $IPAddress = "10.10.0.111"
 
 New-DLabVM $VMName -Password $Password -Force
-Start-VM $VMName
-Wait-VM $VMName -For IPAddress -Timeout 60
+Start-DLabVM $VMName
 
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -73,6 +75,9 @@ Add-DLabVMToDomain $VMName -VMSession $VMSession `
     -DomainName $DomainName -UserName $DomainUserName -Password $DomainPassword
 
 # Wait for virtual machine to reboot after domain join operation
+
+Wait-DLabVM $VMName 'Reboot' -Timeout 120
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
@@ -97,9 +102,9 @@ $VMName = "IT-YOLO-WAYK"
 $IPAddress = "10.10.0.112"
 
 New-DLabVM $VMName -Password $Password -Force
-Start-VM $VMName
-Wait-VM $VMName -For IPAddress -Timeout 60
+Start-DLabVM $VMName
 
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -112,6 +117,9 @@ Add-DLabVMToDomain $VMName -VMSession $VMSession `
 
 # Wait for virtual machine to reboot after domain join operation
 
+Wait-DLabVM $VMName 'Reboot' -Timeout 120
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
+
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
 Invoke-Command -ScriptBlock {
@@ -121,6 +129,8 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Restart-VM $VMName -Force
+Wait-DLabVM $VMName 'IPAddress' -Timeout 120
+$VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
 Invoke-Command -ScriptBlock {
     choco install -y mongodb
@@ -138,13 +148,6 @@ Invoke-Command -ScriptBlock { Param($WaykRealm)
     }
     New-WaykBastionConfig @Params
 } -Session $VMSession -ArgumentList @($WaykRealm)
-
-# prefetch Windows container images (takes a while)
-
-Invoke-Command -ScriptBlock {
-    Import-Module -Name WaykBastion
-    Update-WaykBastionImage
-} -Session $VMSession
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
@@ -172,15 +175,22 @@ Invoke-Command -ScriptBlock { Param($ExternalHost, $CertificateFile, $Certificat
     Set-WaykBastionConfig @Params
 } -Session $VMSession -ArgumentList @($BastionHostName, $CertificateFile, $CertificatePassword)
 
+# prefetch Windows container images (takes a while)
+
+Invoke-Command -ScriptBlock {
+    Import-Module -Name WaykBastion
+    Update-WaykBastionImage
+} -Session $VMSession
+
 # IT-YOLO-DVLS
 
 $VMName = "IT-YOLO-DVLS"
 $IPAddress = "10.10.0.113"
 
 New-DLabVM $VMName -Password $Password -Force
-Start-VM $VMName
-Wait-VM $VMName -For IPAddress -Timeout 60
+Start-DLabVM $VMName
 
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -192,6 +202,9 @@ Add-DLabVMToDomain $VMName -VMSession $VMSession `
     -DomainName $DomainName -UserName $DomainUserName -Password $DomainPassword
 
 # Wait for virtual machine to reboot after domain join operation
+
+Wait-DLabVM $VMName 'Reboot' -Timeout 120
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
