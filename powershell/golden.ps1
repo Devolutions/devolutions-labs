@@ -91,6 +91,11 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
+    & netsh advfirewall firewall set rule group="Network Discovery" new enable=yes
+    & netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=yes
+} -Session $VMSession
+
+Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
     Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 } -Session $VMSession
@@ -138,4 +143,5 @@ $GoldenDiskFileName = "Windows Server 2019 Standard - $(Get-Date -Format FileDat
 $GoldenDiskPath = Join-Path $ParentDisksPath $GoldenDiskFileName
 
 Move-Item -Path $ParentDiskPath -Destination $GoldenDiskPath
+Optimize-VHD -Path $GoldenDiskPath -Mode Full
 Set-ItemProperty -Path $GoldenDiskPath -Name IsReadOnly $true

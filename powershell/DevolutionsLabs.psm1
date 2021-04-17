@@ -320,6 +320,21 @@ function Start-DLabVM
     Start-VM $VMName
 }
 
+function Get-DLabVMUptime
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName
+    )
+
+    if (-Not $(Test-DLabVM $VMName)) {
+        throw "VM `"$VMName`" does not exist"
+    }
+
+    $(Get-VM $VMName).Uptime
+}
+
 function Wait-DLabVM
 {
     [CmdletBinding()]
@@ -329,6 +344,7 @@ function Wait-DLabVM
         [Parameter(Mandatory=$true,Position=1)]
         [ValidateSet("Heartbeat","IPAddress","Reboot","MemoryOperations","PSDirect")]
         [string] $Condition,
+        [TimeSpan] $OldUptime,
         [string] $UserName,
         [string] $Password,
         [int] $Timeout = 60,
@@ -343,6 +359,15 @@ function Wait-DLabVM
         $Credential = Get-DLabCredential -UserName $UserName -Password $Password
         while ((Invoke-Command -VMName $VMName -Credential $Credential `
             { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 1 }
+    } elseif ($Condition -eq 'Reboot') {
+        if (-Not $PSBoundParameters.ContainsKey('OldUptime')) {
+            $OldUptime = $(Get-VM $VMName).Uptime
+        }
+        do {
+            $NewUptime = $(Get-VM $VMName).Uptime
+            Start-Sleep 1
+        }
+        while ($NewUptime -ge $OldUptime)
     } else {
         Wait-VM $VMName -For $Condition -Timeout $Timeout
     }

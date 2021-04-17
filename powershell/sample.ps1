@@ -18,6 +18,8 @@ $SafeModeAdministratorPassword = "SafeMode123!"
 $CACommonName = "IT-YOLO-CA"
 $CAHostName = "IT-YOLO-CA.$DomainName"
 
+$DCHostName = "IT-YOLO-DC.$DomainName"
+
 $DomainUserName = "$DomainNetbiosName\Administrator"
 $DomainPassword = $Password
 
@@ -155,10 +157,10 @@ $BastionHostName = "bastion.$DomainName"
 $CertificateFile = "~\Documents\cert.pfx"
 $CertificatePassword = "cert123!"
 
-Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress)
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
     Install-WindowsFeature RSAT-DNS-Server
-    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny
-} -Session $VMSession -ArgumentList @("bastion", $DomainName, $IPAddress)
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @("bastion", $DomainName, $IPAddress, $DCHostName)
 
 Request-DLabCertificate $VMName -VMSession $VMSession `
     -CommonName $BastionHostName `
@@ -244,3 +246,17 @@ Invoke-Command -ScriptBlock {
 Invoke-Command -ScriptBlock {
     choco install -y sql-server-express
 } -Session $VMSession
+
+$DvlsHostName = "dvls.$DomainName"
+$CertificateFile = "~\Documents\cert.pfx"
+$CertificatePassword = "cert123!"
+
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
+    Install-WindowsFeature RSAT-DNS-Server
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @("dvls", $DomainName, $IPAddress, $DCHostName)
+
+Request-DLabCertificate $VMName -VMSession $VMSession `
+    -CommonName $DvlsHostName `
+    -CAHostName $CAHostName -CACommonName $CACommonName `
+    -CertificateFile $CertificateFile -Password $CertificatePassword
