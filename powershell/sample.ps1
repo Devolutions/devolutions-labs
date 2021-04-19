@@ -8,7 +8,7 @@ $Password = "yolo123!"
 
 $SwitchName = "LAN Switch"
 $NetAdapterName = "vEthernet (LAN)"
-$DefaultGateway = "10.10.0.1"
+$DefaultGateway = "10.10.0.50"
 
 $WaykRealm = "it-yolo.ninja"
 $DomainName = "ad.it-yolo.ninja"
@@ -17,6 +17,9 @@ $SafeModeAdministratorPassword = "SafeMode123!"
 
 $CACommonName = "IT-YOLO-CA"
 $CAHostName = "IT-YOLO-CA.$DomainName"
+
+$DomainController = "IT-YOLO-DC"
+$DCHostName = "IT-YOLO-DC.$DomainName"
 
 $DomainUserName = "$DomainNetbiosName\Administrator"
 $DomainPassword = $Password
@@ -47,11 +50,21 @@ Invoke-Command -ScriptBlock { Param($DomainName, $DomainNetbiosName, $SafeModeAd
         -SafeModeAdministratorPassword $SafeModeAdministratorPassword -Force
 } -Session $VMSession -ArgumentList @($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
 
-# wait a good 5-10 minutes for the domain controller promotion to complete after reboot
-
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
+$BootTime = Get-Date
+
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
+
+# wait a good 5-10 minutes for the domain controller promotion to complete after reboot
+
+Invoke-Command -ScriptBlock { Param($BootTime)
+    while (-Not [bool]$(Get-EventLog -LogName "System" `
+        -Source "Microsoft-Windows-GroupPolicy" -InstanceId 1502 `
+        -After $BootTime -ErrorAction SilentlyContinue)) {
+            Start-Sleep 1
+    }
+} -Session $VMSession -ArgumentList @($BootTime)
 
 # IT-YOLO-CA
 
@@ -61,7 +74,7 @@ $IPAddress = "10.10.0.111"
 New-DLabVM $VMName -Password $Password -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -72,12 +85,13 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
 # Join virtual machine to domain
 
 Add-DLabVMToDomain $VMName -VMSession $VMSession `
-    -DomainName $DomainName -UserName $DomainUserName -Password $DomainPassword
+    -DomainName $DomainName -DomainController $DCHostName `
+    -UserName $DomainUserName -Password $DomainPassword
 
 # Wait for virtual machine to reboot after domain join operation
 
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
@@ -104,7 +118,7 @@ $IPAddress = "10.10.0.112"
 New-DLabVM $VMName -Password $Password -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 120 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -113,12 +127,13 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -DnsServerAddress $DnsServerAddress
 
 Add-DLabVMToDomain $VMName -VMSession $VMSession `
-    -DomainName $DomainName -UserName $DomainUserName -Password $DomainPassword
+    -DomainName $DomainName -DomainController $DomainController `
+    -UserName $DomainUserName -Password $DomainPassword
 
 # Wait for virtual machine to reboot after domain join operation
 
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
@@ -128,8 +143,11 @@ Invoke-Command -ScriptBlock {
     Install-Package -Name docker -ProviderName DockerMsftProvider -Force
 } -Session $VMSession
 
+$OldUptime = Get-DLabVMUptime $VMName
 Restart-VM $VMName -Force
-Wait-DLabVM $VMName 'IPAddress' -Timeout 120
+Wait-DLabVM $VMName 'Reboot' -Timeout 120 -OldUptime $OldUptime
+
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 120
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
 Invoke-Command -ScriptBlock {
@@ -155,10 +173,10 @@ $BastionHostName = "bastion.$DomainName"
 $CertificateFile = "~\Documents\cert.pfx"
 $CertificatePassword = "cert123!"
 
-Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress)
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
     Install-WindowsFeature RSAT-DNS-Server
-    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny
-} -Session $VMSession -ArgumentList @("bastion", $DomainName, $IPAddress)
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @("bastion", $DomainName, $IPAddress, $DCHostName)
 
 Request-DLabCertificate $VMName -VMSession $VMSession `
     -CommonName $BastionHostName `
@@ -190,7 +208,7 @@ $IPAddress = "10.10.0.113"
 New-DLabVM $VMName -Password $Password -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 120 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
@@ -199,12 +217,13 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -DnsServerAddress $DnsServerAddress
 
 Add-DLabVMToDomain $VMName -VMSession $VMSession `
-    -DomainName $DomainName -UserName $DomainUserName -Password $DomainPassword
+    -DomainName $DomainName -DomainController $DomainController `
+    -UserName $DomainUserName -Password $DomainPassword
 
 # Wait for virtual machine to reboot after domain join operation
 
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
@@ -242,5 +261,19 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
-    choco install -y sql-server-express
+    choco install -y --no-progress sql-server-express
 } -Session $VMSession
+
+$DvlsHostName = "dvls.$DomainName"
+$CertificateFile = "~\Documents\cert.pfx"
+$CertificatePassword = "cert123!"
+
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
+    Install-WindowsFeature RSAT-DNS-Server
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @("dvls", $DomainName, $IPAddress, $DCHostName)
+
+Request-DLabCertificate $VMName -VMSession $VMSession `
+    -CommonName $DvlsHostName `
+    -CAHostName $CAHostName -CACommonName $CACommonName `
+    -CertificateFile $CertificateFile -Password $CertificatePassword

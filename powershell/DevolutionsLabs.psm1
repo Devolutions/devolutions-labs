@@ -125,6 +125,60 @@ function Test-DLabVM
     [bool]$(Get-VM $Name -ErrorAction SilentlyContinue)
 }
 
+function New-DLabRouterVM
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name,
+        [string] $Password,
+        [Parameter(Mandatory=$true)]
+        [string] $WanSwitchName,
+        [Parameter(Mandatory=$true)]
+        [string] $LanSwitchName,
+        [UInt64] $DiskSize = 32GB,
+        [switch] $Force
+    )
+
+    if (Test-DLabVM $Name) {
+        if ($Force) {
+            Stop-VM $Name -Force
+            Remove-VM $Name -Force
+        } else {
+            throw "VM `"$Name`" already exists!"
+        }
+    }
+
+    $IsoFilePath = $(Get-DLabIsoFilePath "alpine").FullName
+
+    $ParentDisk = New-DLabParentDisk $Name -DiskSize $DiskSize -Force:$Force
+
+    $Params = @{
+        Name = $Name;
+        VHDPath = $ParentDisk.Path;
+        MemoryStartupBytes = 2GB;
+    }
+
+    if ($SwitchName) {
+        $Params['SwitchName'] = $WanSwitchName;
+    }
+
+    New-VM @Params
+
+    Set-VMDvdDrive -VMName $Name -ControllerNumber 1 -Path $IsoFilePath
+
+    $Params = @{
+        Name = $Name;
+        ProcessorCount = 2;
+        AutomaticStopAction = "Shutdown";
+        CheckpointType = "Disabled";
+    }
+
+    Set-VM @Params
+
+    Add-VMNetworkAdapter -VMName $VMName -SwitchName $LanSwitchName
+}
+
 function New-DLabParentVM
 {
     [CmdletBinding()]
@@ -140,7 +194,7 @@ function New-DLabParentVM
     if (Test-DLabVM $Name) {
         if ($Force) {
             Stop-VM $Name -Force
-            Remove-VM $Name
+            Remove-VM $Name -Force
         } else {
             throw "VM `"$Name`" already exists!"
         }
@@ -187,7 +241,7 @@ function New-DLabVM
     if (Test-DLabVM $Name) {
         if ($Force) {
             Stop-VM $Name -Force
-            Remove-VM $Name
+            Remove-VM $Name -Force
         } else {
             throw "VM `"$Name`" already exists!"
         }
@@ -320,6 +374,21 @@ function Start-DLabVM
     Start-VM $VMName
 }
 
+function Get-DLabVMUptime
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName
+    )
+
+    if (-Not $(Test-DLabVM $VMName)) {
+        throw "VM `"$VMName`" does not exist"
+    }
+
+    $(Get-VM $VMName).Uptime
+}
+
 function Wait-DLabVM
 {
     [CmdletBinding()]
@@ -329,6 +398,7 @@ function Wait-DLabVM
         [Parameter(Mandatory=$true,Position=1)]
         [ValidateSet("Heartbeat","IPAddress","Reboot","MemoryOperations","PSDirect")]
         [string] $Condition,
+        [TimeSpan] $OldUptime,
         [string] $UserName,
         [string] $Password,
         [int] $Timeout = 60,
@@ -343,6 +413,15 @@ function Wait-DLabVM
         $Credential = Get-DLabCredential -UserName $UserName -Password $Password
         while ((Invoke-Command -VMName $VMName -Credential $Credential `
             { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 1 }
+    } elseif ($Condition -eq 'Reboot') {
+        if (-Not $PSBoundParameters.ContainsKey('OldUptime')) {
+            $OldUptime = $(Get-VM $VMName).Uptime
+        }
+        do {
+            $NewUptime = $(Get-VM $VMName).Uptime
+            Start-Sleep 1
+        }
+        while ($NewUptime -ge $OldUptime)
     } else {
         Wait-VM $VMName -For $Condition -Timeout $Timeout
     }
@@ -427,6 +506,7 @@ function Set-DLabVMNetAdapter
         }
         New-NetIPAddress @Params
         Set-DnsClientServerAddress -InterfaceAlias $NetAdapterName -ServerAddresses $DnsServerAddress
+        Start-Sleep 5
     } -Session $VMSession -ArgumentList @($MacAddress, $NetAdapterName,
         $IPAddress, $DefaultGateway, $DnsServerAddress)
 }
@@ -442,17 +522,23 @@ function Add-DLabVMToDomain
         [Parameter(Mandatory=$true)]
         [string] $DomainName,
         [Parameter(Mandatory=$true)]
+        [string] $DomainController,
+        [Parameter(Mandatory=$true)]
         [string] $UserName,
         [Parameter(Mandatory=$true)]
         [string] $Password
     )
 
-    Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password)
+    Invoke-Command -ScriptBlock { Param($DomainName, $DomainController, $UserName, $Password)
         $ConfirmPreference = "High"
         $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
         $Credential = New-Object System.Management.Automation.PSCredential @($UserName, $SecurePassword)
+        while (-Not [bool](Resolve-DnsName -Name $DomainController -ErrorAction SilentlyContinue)) {
+            Write-Host "Waiting for $DomainController..."
+            Start-Sleep 1
+        }
         Add-Computer -DomainName $DomainName -Credential $Credential -Restart
-    } -Session $VMSession -ArgumentList @($DomainName, $UserName, $Password)
+    } -Session $VMSession -ArgumentList @($DomainName, $DomainController, $UserName, $Password)
 }
 
 function Request-DLabCertificate
