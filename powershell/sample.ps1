@@ -50,11 +50,21 @@ Invoke-Command -ScriptBlock { Param($DomainName, $DomainNetbiosName, $SafeModeAd
         -SafeModeAdministratorPassword $SafeModeAdministratorPassword -Force
 } -Session $VMSession -ArgumentList @($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
 
-# wait a good 5-10 minutes for the domain controller promotion to complete after reboot
-
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
+$BootTime = Get-Date
+
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
+
+# wait a good 5-10 minutes for the domain controller promotion to complete after reboot
+
+Invoke-Command -ScriptBlock { Param($BootTime)
+    while (-Not [bool]$(Get-EventLog -LogName "System" `
+        -Source "Microsoft-Windows-GroupPolicy" -InstanceId 1502 `
+        -After $BootTime -ErrorAction SilentlyContinue)) {
+            Start-Sleep 1
+    }
+} -Session $VMSession -ArgumentList @($BootTime)
 
 # IT-YOLO-CA
 
@@ -251,7 +261,7 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
-    choco install -y sql-server-express
+    choco install -y --no-progress sql-server-express
 } -Session $VMSession
 
 $DvlsHostName = "dvls.$DomainName"

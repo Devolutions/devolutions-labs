@@ -143,7 +143,7 @@ function New-DLabRouterVM
     if (Test-DLabVM $Name) {
         if ($Force) {
             Stop-VM $Name -Force
-            Remove-VM $Name
+            Remove-VM $Name -Force
         } else {
             throw "VM `"$Name`" already exists!"
         }
@@ -194,7 +194,7 @@ function New-DLabParentVM
     if (Test-DLabVM $Name) {
         if ($Force) {
             Stop-VM $Name -Force
-            Remove-VM $Name
+            Remove-VM $Name -Force
         } else {
             throw "VM `"$Name`" already exists!"
         }
@@ -241,7 +241,7 @@ function New-DLabVM
     if (Test-DLabVM $Name) {
         if ($Force) {
             Stop-VM $Name -Force
-            Remove-VM $Name
+            Remove-VM $Name -Force
         } else {
             throw "VM `"$Name`" already exists!"
         }
