@@ -50,6 +50,116 @@ function Get-DLabParentDiskFilePath
     $(Get-ChildItem -Path $ParentDisksPath "*$Name*.vhdx" | Sort-Object LastWriteTime -Descending)[0]
 }
 
+function New-DLabIsoFile
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Path,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Destination,
+        [Parameter(Mandatory=$true)]
+        [string] $VolumeName,
+        [switch] $IncludeRoot,
+        [switch] $Force
+    )
+
+    # https://blog.apps.id.au/powershell-tools-create-an-iso/
+    # http://blogs.msdn.com/b/opticalstorage/archive/2010/08/13/writing-optical-discs-using-imapi-2-in-powershell.aspx
+    # http://tools.start-automating.com/Install-ExportISOCommand/
+    # http://stackoverflow.com/a/9802807/223837
+
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa364840.aspx
+    $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
+    $fsi.FileSystemsToCreate = 4 # FsiFileSystemUDF
+    $fsi.FreeMediaBlocks = 0
+    $fsi.VolumeName = $VolumeName
+    $fsi.Root.AddTree($Path, $IncludeRoot)
+    $istream = $fsi.CreateResultImage().ImageStream
+
+    $Options = if ($PSEdition -eq 'Core') {
+        @{ CompilerOptions = "/unsafe" }
+    } else {
+        $cp = New-Object CodeDom.Compiler.CompilerParameters
+        $cp.CompilerOptions = "/unsafe"
+        $cp.WarningLevel = 4
+        $cp.TreatWarningsAsErrors = $true
+        @{ CompilerParameters = $cp }
+    }
+
+    Add-Type @Options -TypeDefinition @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices.ComTypes;
+
+namespace IsoHelper {
+    public static class FileUtil {
+        public static void WriteIStreamToFile(object i, string fileName) {
+            IStream inputStream = i as IStream;
+            FileStream outputFileStream = File.OpenWrite(fileName);
+            int bytesRead = 0;
+            int offset = 0;
+            byte[] data;
+            do {
+                data = Read(inputStream, 2048, out bytesRead);
+                outputFileStream.Write(data, 0, bytesRead);
+                offset += bytesRead;
+            } while (bytesRead == 2048);
+            outputFileStream.Flush();
+            outputFileStream.Close();
+        }
+
+        unsafe static private byte[] Read(IStream stream, int toRead, out int read) {
+            byte[] buffer = new byte[toRead];
+            int bytesRead = 0;
+            int* ptr = &bytesRead;
+            stream.Read(buffer, toRead, (IntPtr)ptr);
+            read = bytesRead;
+            return buffer;
+        }
+    }
+}
+"@
+
+    [IsoHelper.FileUtil]::WriteIStreamToFile($istream, $Destination)
+}
+
+function New-DLabFormattedDisk
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $DiskPath,
+        [Parameter(Mandatory=$true)]
+        [UInt64] $DiskSize,
+        [ValidateSet("MBR","GPT")]
+        [string] $PartitionStyle = "GPT",
+        [ValidateSet("FAT32","NTFS")]
+        [string] $FileSystem = "NTFS",
+        [Parameter(Mandatory=$true)]
+        [string] $FileSystemLabel,
+        [switch] $Force
+    )
+
+    if (Test-Path $DiskPath -PathType 'Leaf') {
+        if ($Force) {
+            Remove-Item -Path $DiskPath
+        } else {
+            throw "`"$DiskPath`" already exists!"
+        }
+    }
+
+    New-VHD -Path $DiskPath -Dynamic -SizeBytes $DiskSize
+    $NewDisk = Mount-VHD -Path $DiskPath -PassThru
+
+    Initialize-Disk -Number $NewDisk.DiskNumber -PartitionStyle $PartitionStyle
+    $Partition = New-Partition -DiskNumber $NewDisk.DiskNumber -AssignDriveLetter -UseMaximumSize
+    $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel
+
+    Dismount-VHD -Path $DiskPath
+    $NewDisk
+}
+
 function New-DLabParentDisk
 {
     [CmdletBinding()]
@@ -342,7 +452,7 @@ function New-DLabAnswerFile
     }
 
     $oobeSystem = $answer.unattend.settings | Where-Object { $_.pass -Like 'oobeSystem' }
-    $component = $oobeSystem.component
+    $component = $oobeSystem.component | Where-Object { $_.name -Like 'Microsoft-Windows-Shell-Setup' }
 
     if (-Not [string]::IsNullOrEmpty($AdministratorPassword)) {
         $component.UserAccounts.AdministratorPassword.Value = $AdministratorPassword

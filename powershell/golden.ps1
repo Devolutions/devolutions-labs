@@ -6,12 +6,37 @@ $Password = "yolo123!"
 
 $VMName = "IT-TEMPLATE"
 
+$AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
+Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+New-Item -ItemType Directory -Path $AnswerTempPath -ErrorAction SilentlyContinue | Out-Null
+$AnswerFilePath = Join-Path $AnswerTempPath "autounattend.xml"
+
+$Params = @{
+    UserFullName = "devolutions";
+    UserOrganization = "IT-HELP";
+    ComputerName = $Name;
+    AdministratorPassword = $Password;
+    UILanguage = "en-US";
+    UserLocale = "en-CA";
+}
+
+New-DLabAnswerFile $AnswerFilePath @Params
+
+$AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
+New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
+
 New-DLabParentVM $VMName
+
+Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
+
+Start-DLabVM $VMName
 
 # perform initial boot and installation manually, then remove ISO drive
 
 Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
     Remove-VMDvdDrive -ErrorAction SilentlyContinue
+
+Remove-Item -Path $AnswerIsoPath -Force -ErrorAction SilentlyContinue | Out-Null
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
