@@ -1,10 +1,10 @@
 
 Import-Module .\DevolutionsLabs.psm1 -Force
 
+$VMName = "IT-TEMPLATE"
+$SwitchName = "Default Switch"
 $UserName = "Administrator"
 $Password = "yolo123!"
-
-$VMName = "IT-TEMPLATE"
 
 $AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
 Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
@@ -25,19 +25,22 @@ New-DLabAnswerFile $AnswerFilePath @Params
 $AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
 New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
 
-New-DLabParentVM $VMName
+New-DLabParentVM $VMName -SwitchName $SwitchName -Force
 
 Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
 
 Start-DLabVM $VMName
 
-# perform initial boot and installation manually, then remove ISO drive
+Start-Sleep 5
+Wait-DLabVM $VMName 'Reboot' -Timeout 600
 
 Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
     Remove-VMDvdDrive -ErrorAction SilentlyContinue
 
 Remove-Item -Path $AnswerIsoPath -Force -ErrorAction SilentlyContinue | Out-Null
+Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
 
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Invoke-Command -ScriptBlock {
@@ -158,7 +161,8 @@ Invoke-Command -ScriptBlock {
     & "$Env:WinDir\System32\Sysprep\sysprep.exe" /oobe /generalize /shutdown /mode:vm
 } -Session $VMSession
 
-Remove-VM $VMName
+Wait-DLabVM $VMName 'Shutdown' -Timeout 120
+Remove-VM $VMName -Force
 
 $ParentDisksPath = Get-DLabPath "ParentDisks"
 $ParentDiskFileName = $VMName, 'vhdx' -Join '.'

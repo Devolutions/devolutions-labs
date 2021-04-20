@@ -506,7 +506,7 @@ function Wait-DLabVM
         [Parameter(Mandatory=$true,Position=0)]
         [string] $VMName,
         [Parameter(Mandatory=$true,Position=1)]
-        [ValidateSet("Heartbeat","IPAddress","Reboot","MemoryOperations","PSDirect")]
+        [ValidateSet("Heartbeat","IPAddress","Shutdown","Reboot","MemoryOperations","PSDirect")]
         [string] $Condition,
         [TimeSpan] $OldUptime,
         [string] $UserName,
@@ -523,6 +523,8 @@ function Wait-DLabVM
         $Credential = Get-DLabCredential -UserName $UserName -Password $Password
         while ((Invoke-Command -VMName $VMName -Credential $Credential `
             { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 1 }
+    } elseif ($Condition -eq 'Shutdown') {
+        while ($(Get-VM $VMName).State -ne "Off") { Start-Sleep 1 }
     } elseif ($Condition -eq 'Reboot') {
         if (-Not $PSBoundParameters.ContainsKey('OldUptime')) {
             $OldUptime = $(Get-VM $VMName).Uptime
