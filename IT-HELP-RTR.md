@@ -22,65 +22,42 @@ New-NetNat –Name NatNetwork –InternalIPInterfaceAddressPrefix 10.9.0.0/24
 
 Download the latest [Alpine Linux](https://www.alpinelinux.org/downloads/) release. The "virtual" build is preferred because it is optimized for virtual machines, otherwise the "standard" build will work just fine. Move the .iso file to a known location (C:\Hyper-V\ISOs) once downloaded.
 
+```bash
+mkfs.vfat /dev/sda1
+mount -t vfat /dev/sda1 /media/usb
+grep /dev/sda1 /proc/mounts >> /etc/fstab
+```
+
+Run `setup-alpine`:
+
 ```text
-# Use US layout with US variant
-KEYMAPOPTS="us us"
-
-# Set machine hostname
-HOSTNAMEOPTS="-n alpine-router"
-
-INTERFACESOPTS="auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet static
-        address 10.9.0.3/24
-        netmask 255.255.255.0
-        gateway 10.9.0.1
-
-auto eth1
-iface eth1 inet static
-        address 10.10.0.51/24
-        netmask 255.255.255.0
-"
-
-# Set DNS name, add Cloudflare DNS servers
-DNSOPTS="-d alpine-router -n 1.1.1.1 1.0.0.1"
-
-# No proxy server configuration
-PROXYOPTS=""
-
-# Set timezone to Eastern Time
-TIMEZONEOPTS="-z America/Toronto"
-
-# Add a random mirror
-APKREPOSOPTS="-r"
-
-# Install OpenSSH
-SSHDOPTS="-c openssh"
-
-# Use openntpd
-NTPOPTS="-c openntpd"
-
-# Use /dev/sda as a system disk
-DISKOPTS="-m sys /dev/sda"
+Select keyboard layout: [none] us
+Select variant (or 'abort') us
+Enter system hostname (short form, e.g. 'foo') [localhost] alpine
+Available interfaces are: eth0
+Enter '?' for help on bridges, bonding and vlans.
+Which one do you want to initialize? (or '?' or 'done') [eth0]
+Ip address for eth0? (or 'dhcp', 'none', '?') [dhcp]
+Do you want to do any manual network configuration? (y/n) [n]
+Changing password for root
+New password: alpine123!
+Retype password: alpine123!
+password: password for root changed by root
+Which timezone are you in? ('?' for list) [UTC] America/Toronto
+HTTP/FTP proxy URL? (e.g. 'http://proxy:8080', or 'none') [none]
+Which NTP client to run? ('busybox', 'openntpd', 'chrony', or 'none') [chrony]
+Enter mirror number (1-60) or URL to add (or r/f/e/done) [1] 1
+Which SSH server? ('openssh', 'dropbear', or 'none') [openssh]
+No available disks found. Unmount /media/cdrom and retry? (y/n) [n]
+Enter where to store configs ('floppy', 'usb', or 'none') [usb]
+Enter apk cache directory (or '?' or 'none') [/media/usb/cache]
 ```
 
-```bash
-setup-alpine -f answer.txt
-```
-
-Set the virtual machine hostname:
+Save the modifications to the external USB, then shutdown the VM:
 
 ```bash
-echo "alpine-router" > /etc/hostname
-hostname -F /etc/hostname
-```
-
-Set the DNS servers:
-
-```bash
-echo -e "nameserver 1.1.1.1\nnameserver 1.0.0.1" > /etc/resolv.conf
+lbu ci usb
+poweroff
 ```
 
 Create and edit the "/etc/network/interfaces":
@@ -108,6 +85,21 @@ Restart networking:
 ```
 
 At this point, you should be able to ping www.google.com and access the internet from the VM.
+
+Create iptables configuration:
+
+```powershell
+apk add iptables
+rc-update add iptables
+
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+sysctl -p
+
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables -A FORWARD -i eth1 -j ACCEPT
+/etc/init.d/iptables save
+/etc/init.d/iptables restart
+```
 
 Install a few basic tools:
 
@@ -162,19 +154,4 @@ mkdir -p /opt/microsoft/powershell/7
 tar zxf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7
 chmod +x /opt/microsoft/powershell/7/pwsh
 ln -s /opt/microsoft/powershell/7/pwsh /usr/bin/pwsh
-```
-
-Create iptables configuration:
-
-```powershell
-apk add iptables
-rc-update add iptables
-
-echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-sysctl -p
-
-iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-iptables -A FORWARD -i eth1 -j ACCEPT
-/etc/init.d/iptables save
-/etc/init.d/iptables restart
 ```

@@ -138,6 +138,7 @@ function New-DLabFormattedDisk
         [string] $FileSystem = "NTFS",
         [Parameter(Mandatory=$true)]
         [string] $FileSystemLabel,
+        [switch] $MountDisk,
         [switch] $Force
     )
 
@@ -149,14 +150,17 @@ function New-DLabFormattedDisk
         }
     }
 
-    New-VHD -Path $DiskPath -Dynamic -SizeBytes $DiskSize
-    $NewDisk = Mount-VHD -Path $DiskPath -PassThru
+    $VirtualDisk = New-VHD -Path $DiskPath -Dynamic -SizeBytes $DiskSize
+    $NewDisk = Mount-VHD -Path $VirtualDisk.Path -PassThru
 
-    Initialize-Disk -Number $NewDisk.DiskNumber -PartitionStyle $PartitionStyle
+    Initialize-Disk -Number $NewDisk.DiskNumber -PartitionStyle $PartitionStyle | Out-Null
     $Partition = New-Partition -DiskNumber $NewDisk.DiskNumber -AssignDriveLetter -UseMaximumSize
-    $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel
+    $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel | Out-Null
 
-    Dismount-VHD -Path $DiskPath
+    if (-Not $MountDisk) {
+        Dismount-VHD -Path $DiskPath | Out-Null
+    }
+    
     $NewDisk
 }
 
@@ -235,6 +239,82 @@ function Test-DLabVM
     [bool]$(Get-VM $Name -ErrorAction SilentlyContinue)
 }
 
+function Expand-AlpineOverlay
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $InputFile,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Destination,
+        [switch] $Force
+    )
+
+    if (Test-Path $Destination) {
+        if ($Force) {
+            Remove-Item $Destination -Recurse -ErrorAction SilentlyContinue | Out-Null
+        } else {
+            throw "VM `"$Destination`" already exists!"
+        }
+    }
+
+    cmd.exe /c "7z.exe x $InputFile -so | 7z x -si -ttar -o`"$Destination`""
+
+    Push-Location
+    Set-Location $Destination
+    $RootPath = Get-Item .
+    $ReparsePoints = Get-ChildItem . -Recurse | `
+        Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }
+    $ReparsePoints | ForEach-Object {
+        $Source = $_.FullName
+        $Target = $_.Target.Replace('/','\')
+        $Target = $Target.Substring($RootPath.FullName.Length)
+        Write-Host "$Source -> $Target"
+        Push-Location
+        Set-Location $_.Directory
+        Remove-Item $Source
+        New-Item -ItemType SymbolicLink -Path $Source -Target $Target
+        Pop-Location
+    }
+    Pop-Location
+}
+
+function Compress-AlpineOverlay
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $InputPath,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Destination,
+        [switch] $Force
+    )
+
+    if (-Not (Test-Path $InputPath -PathType 'Container')) {
+        throw "`"$InputPath`" does not exist or is not a directory"
+    }
+
+    if (-Not $Destination.EndsWith(".tar.gz")) {
+        throw "`"$Destination`" does not end in .tar.gz"
+    }
+
+    if (-Not $Destination.EndsWith(".apkovl.tar.gz")) {
+        Write-Warning -Message "`"$Destination`" does not end in .apkovl.tar.gz"
+    }
+
+    if (Test-Path $Destination) {
+        if ($Force) {
+            Remove-Item $Destination -ErrorAction SilentlyContinue | Out-Null
+        } else {
+            throw "VM `"$Destination`" already exists!"
+        }
+    }
+
+    $TarFileName = $Destination.TrimEnd(".gz") | Split-Path -Leaf
+
+    cmd.exe /c "7z a -ttar -snl -so $TarFileName `"$InputPath/*`" | 7z a -si $Destination"
+}
+
 function New-DLabRouterVM
 {
     [CmdletBinding()]
@@ -246,7 +326,9 @@ function New-DLabRouterVM
         [string] $WanSwitchName,
         [Parameter(Mandatory=$true)]
         [string] $LanSwitchName,
-        [UInt64] $DiskSize = 32GB,
+        [string] $NetworkInterfaces,
+        [string[]] $NameServers = @('1.1.1.1','1.0.0.1'),
+        [UInt64] $DiskSize = 1GB,
         [switch] $Force
     )
 
@@ -261,15 +343,54 @@ function New-DLabRouterVM
 
     $IsoFilePath = $(Get-DLabIsoFilePath "alpine").FullName
 
-    $ParentDisk = New-DLabParentDisk $Name -DiskSize $DiskSize -Force:$Force
+    $ChildDisksPath = Get-DLabPath "ChildDisks"
+    $DiskFileName = $Name, 'vhdx' -Join '.'
+    $DiskPath = Join-Path $ChildDisksPath $DiskFileName
+
+    $Params = @{
+        DiskPath = $DiskPath;
+        DiskSize = $DiskSize;
+        PartitionStyle = "MBR";
+        FileSystem = "FAT32";
+        FileSystemLabel = "APKOVL";
+        MountDisk = $true;
+    }
+
+    $AlpineDisk = New-DLabFormattedDisk @Params -Force:$Force
+
+    $Volumes = $AlpineDisk | Get-Partition | Get-Volume | `
+        Sort-Object -Property Size -Descending
+    $Volume = $Volumes[0]
+
+    $MountPath = "$($Volume.DriveLetter)`:"
+    $ApkOvlFileName = "alpine.apkovl.tar.gz"
+    $OverlayFile = "$MountPath\$ApkOvlFileName"
+    Copy-Item -Path "$PSScriptRoot\$ApkOvlFileName" -Destination $OverlayFile
+
+    $TempPath = Join-Path $([System.IO.Path]::GetTempPath()) "apkovl-$Name"
+    Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+
+    Expand-AlpineOverlay $OverlayFile -Destination $TempPath -Force
+
+    $ResolvConf = $($NameServers | ForEach-Object { "nameserver $_" } | Out-String).Trim()
+    Set-Content -Path $(Join-Path $TempPath "/etc/resolv.conf") -Value $ResolvConf
+
+    if (-Not [string]::IsNullOrEmpty($NetworkInterfaces)) {
+        Set-Content -Path $(Join-Path $TempPath "/etc/network/interfaces") -Value $NetworkInterfaces
+    }
+
+    Compress-AlpineOverlay $TempPath -Destination $OverlayFile -Force
+    Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+
+    Dismount-VHD -Path $AlpineDisk.Path
 
     $Params = @{
         Name = $Name;
-        VHDPath = $ParentDisk.Path;
-        MemoryStartupBytes = 2GB;
+        VHDPath = $AlpineDisk.Path;
+        MemoryStartupBytes = 1GB;
     }
 
-    if ($SwitchName) {
+    if ($WanSwitchName) {
         $Params['SwitchName'] = $WanSwitchName;
     }
 

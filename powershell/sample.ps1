@@ -3,6 +3,10 @@ Import-Module .\DevolutionsLabs.psm1 -Force
 
 # common variable definitions
 
+$LabPrefix = "IT-YOLO"
+$LabDnsTld = ".ninja"
+$LabName = $LabPrefix.ToLower() + $LabDnsTld
+
 $UserName = "Administrator"
 $Password = "yolo123!"
 
@@ -10,27 +14,31 @@ $SwitchName = "LAN Switch"
 $NetAdapterName = "vEthernet (LAN)"
 $DefaultGateway = "10.10.0.50"
 
-$WaykRealm = "it-yolo.ninja"
-$DomainName = "ad.it-yolo.ninja"
-$DomainNetbiosName = "IT-YOLO"
+$WaykRealm = $LabName
+$DomainName = "ad.$LabName"
+$DomainNetbiosName = $LabPrefix
 $SafeModeAdministratorPassword = "SafeMode123!"
 
-$CACommonName = "IT-YOLO-CA"
-$CAHostName = "IT-YOLO-CA.$DomainName"
+$CAMachineName = $LabPrefix, "CA" -Join "-"
+$CACommonName = $CAMachineName
+$CAHostName = "$CAMachineName.$DomainName"
 
-$DomainController = "IT-YOLO-DC"
-$DCHostName = "IT-YOLO-DC.$DomainName"
+$DCMachineName = $LabPrefix, "DC" -Join "-"
+$DomainController = $DCMachineName
+$DCHostName = "$DCMachineName.$DomainName"
 
 $DomainUserName = "$DomainNetbiosName\Administrator"
 $DomainPassword = $Password
 
-# IT-YOLO-DC
+$DnsServerForwarder = "1.1.1.1"
 
-$VMName = "IT-YOLO-DC"
+# DC VM
+
+$VMAlias = "DC"
+$VMName = $LabPrefix, $VMAlias -Join "-"
 $IPAddress = "10.10.0.110"
 
 $DnsServerAddress = $IPAddress
-$DnsServerForwarder = "1.1.1.1"
 
 New-DLabVM $VMName -Password $Password -Force
 Start-DLabVM $VMName
@@ -66,9 +74,10 @@ Invoke-Command -ScriptBlock { Param($BootTime)
     }
 } -Session $VMSession -ArgumentList @($BootTime)
 
-# IT-YOLO-CA
+# CA VM
 
-$VMName = "IT-YOLO-CA"
+$VMAlias = "CA"
+$VMName = $LabPrefix, $VMAlias -Join "-"
 $IPAddress = "10.10.0.111"
 
 New-DLabVM $VMName -Password $Password -Force
@@ -110,9 +119,10 @@ Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommon
     Install-AdcsCertificationAuthority @Params -Force
 } -Session $VMSession -ArgumentList @($DomainName, $DomainUserName, $DomainPassword, $CACommonName)
 
-# IT-YOLO-WAYK
+# WAYK VM
 
-$VMName = "IT-YOLO-WAYK"
+$VMAlias = "WAYK"
+$VMName = $LabPrefix, $VMAlias -Join "-"
 $IPAddress = "10.10.0.112"
 
 New-DLabVM $VMName -Password $Password -Force
@@ -200,9 +210,10 @@ Invoke-Command -ScriptBlock {
     Update-WaykBastionImage
 } -Session $VMSession
 
-# IT-YOLO-DVLS
+# DVLS VM
 
-$VMName = "IT-YOLO-DVLS"
+$VMAlias = "DVLS"
+$VMName = $LabPrefix, $VMAlias -Join "-"
 $IPAddress = "10.10.0.113"
 
 New-DLabVM $VMName -Password $Password -Force
