@@ -4,7 +4,7 @@ Import-Module .\DevolutionsLabs.psm1 -Force
 $WanSwitchName = "NAT Switch"
 $LanSwitchName = "LAN Switch"
 
-$VMName = "IT-ROUTER"
+$VMName = "IT-YOLO-RTR"
 
 $NetworkInterfaces = @"
 auto lo
@@ -27,3 +27,20 @@ New-DLabRouterVM $VMName `
     -LanSwitchName $LanSwitchName `
     -NetworkInterfaces $NetworkInterfaces `
     -Force
+
+Start-DLabVM $VMName
+
+Wait-DLabVM $VMName 'Shutdown' -Timeout 600
+
+$DiskPath = Join-Path $(Get-DLabPath "ChildDisks") $($VMName, 'vhdx' -Join '.')
+
+$AlpineDisk = Mount-VHD -Path $DiskPath -PassThru
+
+$Volumes = $AlpineDisk | Get-Partition | Get-Volume | `
+    Sort-Object -Property Size -Descending
+$Volume = $Volumes[0]
+
+$MountPath = "$($Volume.DriveLetter)`:"
+Remove-Item "$MountPath\unattend.sh" -ErrorAction SilentlyContinue | Out-Null
+
+Dismount-VHD $DiskPath

@@ -53,6 +53,27 @@ Enter where to store configs ('floppy', 'usb', or 'none') [usb]
 Enter apk cache directory (or '?' or 'none') [/media/usb/cache]
 ```
 
+Add '/etc/local.d/unattend.start' file:
+
+```
+#!/bin/sh
+for MEDIA in #(ls /media)
+do
+    UNATTEND_SCRIPT="/media/$MEDIA/unattend.sh"
+    if [ -x $UNATTEND_SCRIPT ]; then
+        echo "executing $UNATTEND_SCRIPT"
+        $UNATTEND_SCRIPT
+    fi
+done
+```
+
+Register unattend script:
+
+```bash
+chmod +x /etc/local.d/unattend.start
+rc-update add local default
+```
+
 Save the modifications to the external USB, then shutdown the VM:
 
 ```bash

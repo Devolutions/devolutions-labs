@@ -254,7 +254,7 @@ function Expand-AlpineOverlay
         if ($Force) {
             Remove-Item $Destination -Recurse -ErrorAction SilentlyContinue | Out-Null
         } else {
-            throw "VM `"$Destination`" already exists!"
+            throw "`"$Destination`" already exists!"
         }
     }
 
@@ -269,11 +269,10 @@ function Expand-AlpineOverlay
         $Source = $_.FullName
         $Target = $_.Target.Replace('/','\')
         $Target = $Target.Substring($RootPath.FullName.Length)
-        Write-Host "$Source -> $Target"
         Push-Location
         Set-Location $_.Directory
-        Remove-Item $Source
-        New-Item -ItemType SymbolicLink -Path $Source -Target $Target
+        Remove-Item $Source | Out-Null
+        New-Item -ItemType SymbolicLink -Path $Source -Target $Target | Out-Null
         Pop-Location
     }
     Pop-Location
@@ -382,6 +381,8 @@ function New-DLabRouterVM
     Compress-AlpineOverlay $TempPath -Destination $OverlayFile -Force
     Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
 
+    Copy-Item "$PSScriptRoot\unattend.sh" -Destination $(Join-Path $MountPath "unattend.sh")
+
     Dismount-VHD -Path $AlpineDisk.Path
 
     $Params = @{
@@ -407,7 +408,7 @@ function New-DLabRouterVM
 
     Set-VM @Params
 
-    Add-VMNetworkAdapter -VMName $VMName -SwitchName $LanSwitchName
+    Add-VMNetworkAdapter -VMName $Name -SwitchName $LanSwitchName
 }
 
 function New-DLabParentVM
