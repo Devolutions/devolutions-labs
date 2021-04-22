@@ -4,7 +4,7 @@ Import-Module .\DevolutionsLabs.psm1 -Force
 $VMName = "IT-TEMPLATE"
 $SwitchName = "Default Switch"
 $UserName = "Administrator"
-$Password = "yolo123!"
+$Password = "lab123!"
 
 $AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
 Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
@@ -164,7 +164,7 @@ Invoke-Command -ScriptBlock {
 Wait-DLabVM $VMName 'Shutdown' -Timeout 120
 Remove-VM $VMName -Force
 
-$ParentDisksPath = Get-DLabPath "ParentDisks"
+$ParentDisksPath = Get-DLabPath "IMGs"
 $ParentDiskFileName = $VMName, 'vhdx' -Join '.'
 $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
 

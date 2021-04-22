@@ -5,7 +5,7 @@ Create a Hyper-V internal switch that will be used for the LAN between the Hyper
 ```powershell
 New-VMSwitch –SwitchName "LAN Switch" –SwitchType Internal –Verbose
 $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(LAN Switch)" }
-New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.10.0.5 -PrefixLength 24
+New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.10.0.1 -PrefixLength 24
 Set-DnsClientServerAddress -InterfaceIndex $NetAdapter.IfIndex -ServerAddresses @()
 ```
 

@@ -7,12 +7,25 @@ if ($IsWindows) {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 }
 
+function Get-DLabIpAddress
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $NetworkBase,
+        [Parameter(Mandatory=$true,Position=1)]
+        [int] $HostNumber
+    )
+
+    $([IPAddress] (([IPAddress] $NetworkBase).Address + ([IPAddress] "0.0.0.$HostNumber").Address)).ToString()
+}
+'ISOs','IMGs','VHDs','VFDs'
 function Get-DLabPath
 {
     [CmdletBinding()]
 	param(
         [Parameter(Mandatory=$true,Position=0)]
-        [ValidateSet("ISOs","VHDs","ChildDisks","ParentDisks")]
+        [ValidateSet("ISOs","IMGs","VHDs","VFDs","ChildDisks","ParentDisks")]
         [string] $PathName
     )
 
@@ -20,9 +33,10 @@ function Get-DLabPath
 
     switch ($PathName) {
         "ISOs" { Join-Path $HyperVBasePath "ISOs" }
-        "VHDs" { Join-Path $HyperVBasePath "Virtual Hard Disks" }
-        "ChildDisks" { Join-Path $HyperVBasePath "Virtual Hard Disks" }
-        "ParentDisks" { Join-Path $HyperVBasePath "Golden Images" }
+        "IMGs" { Join-Path $HyperVBasePath "IMGs" }
+        "VHDs" { Join-Path $HyperVBasePath "VHDs" }
+        "ChildDisks" { Join-Path $HyperVBasePath "VHDs" }
+        "ParentDisks" { Join-Path $HyperVBasePath "IMGs" }
     }
 }
 
@@ -46,7 +60,7 @@ function Get-DLabParentDiskFilePath
         [string] $Name
     )
 
-    $ParentDisksPath = Get-DLabPath "ParentDisks"
+    $ParentDisksPath = Get-DLabPath "IMGs"
     $(Get-ChildItem -Path $ParentDisksPath "*$Name*.vhdx" | Sort-Object LastWriteTime -Descending)[0]
 }
 
@@ -174,7 +188,7 @@ function New-DLabParentDisk
         [switch] $Force
     )
 
-    $ParentDisksPath = Get-DLabPath "ParentDisks"
+    $ParentDisksPath = Get-DLabPath "IMGs"
     $ParentDiskFileName = $Name, 'vhdx' -Join '.'
     $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
 
@@ -213,7 +227,7 @@ function New-DLabChildDisk
         throw "`"$ParentDiskPath`" cannot be found"
     }
 
-    $ChildDisksPath = Get-DLabPath "ChildDisks"
+    $ChildDisksPath = Get-DLabPath "VHDs"
     $ChildDiskFileName = $Name, 'vhdx' -Join '.'
     $ChildDiskPath = Join-Path $ChildDisksPath $ChildDiskFileName
 
@@ -342,7 +356,7 @@ function New-DLabRouterVM
 
     $IsoFilePath = $(Get-DLabIsoFilePath "alpine").FullName
 
-    $ChildDisksPath = Get-DLabPath "ChildDisks"
+    $ChildDisksPath = Get-DLabPath "VHDs"
     $DiskFileName = $Name, 'vhdx' -Join '.'
     $DiskPath = Join-Path $ChildDisksPath $DiskFileName
 
