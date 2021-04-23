@@ -73,9 +73,9 @@ New-Item -ItemType Directory -Path $HyperVPath -ErrorAction SilentlyContinue | O
 # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 
 $AlpineVersion = "3.13.5"
-$AlpineVersion2 = $AlpineVersion -Replace "^(\d+)\.(\d+)\.(\d+)$", "`$1.`$2"
+$AlpineRelease = $AlpineVersion -Replace "^(\d+)\.(\d+)\.(\d+)$", "v`$1.`$2"
 $AlpineIsoFileName = "alpine-virt-${AlpineVersion}-x86_64.iso"
-$AlpineIsoDownloadUrl = "https://dl-cdn.alpinelinux.org/alpine/${AlpineVersion2}/releases/x86_64/$AlpineIsoFileName"
+$AlpineIsoDownloadUrl = "https://dl-cdn.alpinelinux.org/alpine/${AlpineRelease}/releases/x86_64/$AlpineIsoFileName"
 $AlpineIsoDownloadPath = Join-Path "$HyperVPath\ISOs" $AlpineIsoFileName
 
 if (-Not $(Test-Path -Path $AlpineIsoDownloadPath -PathType 'Leaf')) {
