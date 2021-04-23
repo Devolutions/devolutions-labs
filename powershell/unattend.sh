@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# Setup apk cache on USB drive
+mount -o remount,rw /media/sda1
+mkdir /media/sda1/cache
+setup-apkcache /media/sda1/cache
+
 # Install iptables
 apk add iptables
 rc-update add iptables
@@ -52,15 +57,11 @@ ln -s /opt/microsoft/powershell/7/pwsh /usr/bin/pwsh
 # Enable PowerShell Remoting
 echo "Subsystem powershell /opt/microsoft/powershell/7/pwsh -sshs -NoLogo" >> /etc/ssh/sshd_config
 
-# Remount external drive
-umount /dev/sda1
-mount -t vfat /dev/sda1 /media/usb
-
 # commit overlay changes
 lbu ci
 
-# remove run-once script
-rm -f /media/usb/unattend.sh
+# disable run-once script
+mv /media/sda1/unattend.sh /media/sda1/unattend.old
 
 # shutdown, we're done!
 poweroff

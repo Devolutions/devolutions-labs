@@ -19,7 +19,7 @@ function Get-DLabIpAddress
 
     $([IPAddress] (([IPAddress] $NetworkBase).Address + ([IPAddress] "0.0.0.$HostNumber").Address)).ToString()
 }
-'ISOs','IMGs','VHDs','VFDs'
+
 function Get-DLabPath
 {
     [CmdletBinding()]

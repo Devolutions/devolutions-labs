@@ -20,6 +20,10 @@ choco install -y sysinternals
 choco install -y sublimetext3
 choco install -y notepadplusplus
 
+if ([System.Environment]::OSVersion.Version.Build -ge 18362) {
+    choco install -y microsoft-windows-terminal
+}
+
 $RegPath = "HKLM:\Software\Policies\Mozilla\Firefox\Certificates"
 New-Item -Path $RegPath -Force | Out-Null
 New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
@@ -43,7 +47,7 @@ Install-Module -Name Microsoft.PowerShell.RemotingTools -Scope AllUsers
 Set-Service -Name sshd -StartupType 'Automatic'
 Start-Service sshd
 
-& pwsh.exe -NoLogo -Command "Enable-SSHRemoting -Force"
+& "${Env:ProgramFiles}\PowerShell\7\pwsh.exe" -NoLogo -Command "Enable-SSHRemoting -Force"
 Restart-Service sshd
 
 New-NetFirewallRule -Name 'ICMPv4' -DisplayName 'ICMPv4' `
@@ -64,13 +68,15 @@ New-Item -ItemType Directory -Path $HyperVPath -ErrorAction SilentlyContinue | O
 # To avoid logging in to the Visual Studio subscriber download portal inside the VM, one trick
 # is to start the download from another computer and then grab the short-lived download URL.
 
+# en_windows_server_2019_updated_april_2021_x64_dvd_ef6373f0.iso
+
 # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 
 $AlpineVersion = "3.13.5"
 $AlpineVersion2 = $AlpineVersion -Replace "^(\d+)\.(\d+)\.(\d+)$", "`$1.`$2"
 $AlpineIsoFileName = "alpine-virt-${AlpineVersion}-x86_64.iso"
 $AlpineIsoDownloadUrl = "https://dl-cdn.alpinelinux.org/alpine/${AlpineVersion2}/releases/x86_64/$AlpineIsoFileName"
-$AlpineIsoDownloadPath = Join-Path "$HyperVPath" $AlpineIsoFileName
+$AlpineIsoDownloadPath = Join-Path "$HyperVPath\ISOs" $AlpineIsoFileName
 
 if (-Not $(Test-Path -Path $AlpineIsoDownloadPath -PathType 'Leaf')) {
     Write-Host "Downloading $AlpineIsoDownloadUrl"
@@ -88,3 +94,6 @@ New-VMSwitch –SwitchName "NAT Switch" –SwitchType Internal –Verbose
 $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(NAT Switch)" }
 New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.9.0.1 -PrefixLength 24
 New-NetNat –Name NatNetwork –InternalIPInterfaceAddressPrefix 10.9.0.0/24
+
+# Requires a boot (do it at the end)
+Enable-WindowsOptionalFeature -Online -FeatureName $("Microsoft-Hyper-V", "Containers") -All
