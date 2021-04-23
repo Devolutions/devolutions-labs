@@ -150,27 +150,6 @@ Enable-SSHRemoting -Force
 Restart-Service sshd
 ```
 
-Prepare a new Wayk Bastion configuration:
-
-```powershell
-Add-HostEntry bastion.ad.it-help.ninja 127.0.0.1
-New-WaykBastionConfig -Realm "it-help.ninja" -ExternalUrl "http://bastion.ad.it-help.ninja:4000"
-Enter-WaykBastionConfig -ChangeDirectory
-Update-WaykBastionImage
-Start-WaykBastion
-```
-
-Open "http://bastion.ad.it-help.ninja:4000" in firefox.
-
-For the initial login, use "wayk-admin" as the username, and "wayk-admin" as the password. You will be asked to change the password, simply use the same one as the host machine for the lab.
-
-Stop Wayk Bastion, then register the system service wrapper:
-
-```powershell
-Stop-WaykBastion
-Register-WaykBastionService
-```
-
 ## Hyper-V Lab Environment
 
 ### Golden Image Creation

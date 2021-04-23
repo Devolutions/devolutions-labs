@@ -1,18 +1,46 @@
 
 Import-Module .\DevolutionsLabs.psm1 -Force
 
-$UserName = "Administrator"
-$Password = "yolo123!"
-
 $VMName = "IT-TEMPLATE"
+$SwitchName = "Default Switch"
+$UserName = "Administrator"
+$Password = "lab123!"
 
-New-DLabParentVM $VMName
+$AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
+Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+New-Item -ItemType Directory -Path $AnswerTempPath -ErrorAction SilentlyContinue | Out-Null
+$AnswerFilePath = Join-Path $AnswerTempPath "autounattend.xml"
 
-# perform initial boot and installation manually, then remove ISO drive
+$Params = @{
+    UserFullName = "devolutions";
+    UserOrganization = "IT-HELP";
+    ComputerName = $Name;
+    AdministratorPassword = $Password;
+    UILanguage = "en-US";
+    UserLocale = "en-CA";
+}
+
+New-DLabAnswerFile $AnswerFilePath @Params
+
+$AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
+New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
+
+New-DLabParentVM $VMName -SwitchName $SwitchName -Force
+
+Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
+
+Start-DLabVM $VMName
+
+Start-Sleep 5
+Wait-DLabVM $VMName 'Reboot' -Timeout 600
 
 Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
     Remove-VMDvdDrive -ErrorAction SilentlyContinue
 
+Remove-Item -Path $AnswerIsoPath -Force -ErrorAction SilentlyContinue | Out-Null
+Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Invoke-Command -ScriptBlock {
@@ -60,6 +88,10 @@ Invoke-Command -ScriptBlock {
     Install-Module DevolutionsGateway -Scope AllUsers
     Install-Module Posh-ACME -Scope AllUsers
     Install-Module PsHosts -Scope AllUsers
+} -Session $VMSession
+
+Invoke-Command -ScriptBlock {
+    Install-WindowsFeature RSAT-DNS-Server
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
@@ -133,9 +165,10 @@ Invoke-Command -ScriptBlock {
     & "$Env:WinDir\System32\Sysprep\sysprep.exe" /oobe /generalize /shutdown /mode:vm
 } -Session $VMSession
 
-Remove-VM $VMName
+Wait-DLabVM $VMName 'Shutdown' -Timeout 120
+Remove-VM $VMName -Force
 
-$ParentDisksPath = Get-DLabPath "ParentDisks"
+$ParentDisksPath = Get-DLabPath "IMGs"
 $ParentDiskFileName = $VMName, 'vhdx' -Join '.'
 $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
 

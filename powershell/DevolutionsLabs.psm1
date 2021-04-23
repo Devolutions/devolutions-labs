@@ -7,12 +7,25 @@ if ($IsWindows) {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 }
 
+function Get-DLabIpAddress
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $NetworkBase,
+        [Parameter(Mandatory=$true,Position=1)]
+        [int] $HostNumber
+    )
+
+    $([IPAddress] (([IPAddress] $NetworkBase).Address + ([IPAddress] "0.0.0.$HostNumber").Address)).ToString()
+}
+
 function Get-DLabPath
 {
     [CmdletBinding()]
 	param(
         [Parameter(Mandatory=$true,Position=0)]
-        [ValidateSet("ISOs","VHDs","ChildDisks","ParentDisks")]
+        [ValidateSet("ISOs","IMGs","VHDs","VFDs","ChildDisks","ParentDisks")]
         [string] $PathName
     )
 
@@ -20,9 +33,10 @@ function Get-DLabPath
 
     switch ($PathName) {
         "ISOs" { Join-Path $HyperVBasePath "ISOs" }
-        "VHDs" { Join-Path $HyperVBasePath "Virtual Hard Disks" }
-        "ChildDisks" { Join-Path $HyperVBasePath "Virtual Hard Disks" }
-        "ParentDisks" { Join-Path $HyperVBasePath "Golden Images" }
+        "IMGs" { Join-Path $HyperVBasePath "IMGs" }
+        "VHDs" { Join-Path $HyperVBasePath "VHDs" }
+        "ChildDisks" { Join-Path $HyperVBasePath "VHDs" }
+        "ParentDisks" { Join-Path $HyperVBasePath "IMGs" }
     }
 }
 
@@ -46,8 +60,122 @@ function Get-DLabParentDiskFilePath
         [string] $Name
     )
 
-    $ParentDisksPath = Get-DLabPath "ParentDisks"
+    $ParentDisksPath = Get-DLabPath "IMGs"
     $(Get-ChildItem -Path $ParentDisksPath "*$Name*.vhdx" | Sort-Object LastWriteTime -Descending)[0]
+}
+
+function New-DLabIsoFile
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Path,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Destination,
+        [Parameter(Mandatory=$true)]
+        [string] $VolumeName,
+        [switch] $IncludeRoot,
+        [switch] $Force
+    )
+
+    # https://blog.apps.id.au/powershell-tools-create-an-iso/
+    # http://blogs.msdn.com/b/opticalstorage/archive/2010/08/13/writing-optical-discs-using-imapi-2-in-powershell.aspx
+    # http://tools.start-automating.com/Install-ExportISOCommand/
+    # http://stackoverflow.com/a/9802807/223837
+
+    # http://msdn.microsoft.com/en-us/library/windows/desktop/aa364840.aspx
+    $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
+    $fsi.FileSystemsToCreate = 4 # FsiFileSystemUDF
+    $fsi.FreeMediaBlocks = 0
+    $fsi.VolumeName = $VolumeName
+    $fsi.Root.AddTree($Path, $IncludeRoot)
+    $istream = $fsi.CreateResultImage().ImageStream
+
+    $Options = if ($PSEdition -eq 'Core') {
+        @{ CompilerOptions = "/unsafe" }
+    } else {
+        $cp = New-Object CodeDom.Compiler.CompilerParameters
+        $cp.CompilerOptions = "/unsafe"
+        $cp.WarningLevel = 4
+        $cp.TreatWarningsAsErrors = $true
+        @{ CompilerParameters = $cp }
+    }
+
+    Add-Type @Options -TypeDefinition @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices.ComTypes;
+
+namespace IsoHelper {
+    public static class FileUtil {
+        public static void WriteIStreamToFile(object i, string fileName) {
+            IStream inputStream = i as IStream;
+            FileStream outputFileStream = File.OpenWrite(fileName);
+            int bytesRead = 0;
+            int offset = 0;
+            byte[] data;
+            do {
+                data = Read(inputStream, 2048, out bytesRead);
+                outputFileStream.Write(data, 0, bytesRead);
+                offset += bytesRead;
+            } while (bytesRead == 2048);
+            outputFileStream.Flush();
+            outputFileStream.Close();
+        }
+
+        unsafe static private byte[] Read(IStream stream, int toRead, out int read) {
+            byte[] buffer = new byte[toRead];
+            int bytesRead = 0;
+            int* ptr = &bytesRead;
+            stream.Read(buffer, toRead, (IntPtr)ptr);
+            read = bytesRead;
+            return buffer;
+        }
+    }
+}
+"@
+
+    [IsoHelper.FileUtil]::WriteIStreamToFile($istream, $Destination)
+}
+
+function New-DLabFormattedDisk
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $DiskPath,
+        [Parameter(Mandatory=$true)]
+        [UInt64] $DiskSize,
+        [ValidateSet("MBR","GPT")]
+        [string] $PartitionStyle = "GPT",
+        [ValidateSet("FAT32","NTFS")]
+        [string] $FileSystem = "NTFS",
+        [Parameter(Mandatory=$true)]
+        [string] $FileSystemLabel,
+        [switch] $MountDisk,
+        [switch] $Force
+    )
+
+    if (Test-Path $DiskPath -PathType 'Leaf') {
+        if ($Force) {
+            Remove-Item -Path $DiskPath
+        } else {
+            throw "`"$DiskPath`" already exists!"
+        }
+    }
+
+    $VirtualDisk = New-VHD -Path $DiskPath -Dynamic -SizeBytes $DiskSize
+    $NewDisk = Mount-VHD -Path $VirtualDisk.Path -PassThru
+
+    $NewDisk | Initialize-Disk -PartitionStyle $PartitionStyle | Out-Null
+    $Partition = $NewDisk | New-Partition -AssignDriveLetter -UseMaximumSize
+    $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel | Out-Null
+
+    if (-Not $MountDisk) {
+        Dismount-VHD -Path $DiskPath | Out-Null
+    }
+    
+    $NewDisk
 }
 
 function New-DLabParentDisk
@@ -60,7 +188,7 @@ function New-DLabParentDisk
         [switch] $Force
     )
 
-    $ParentDisksPath = Get-DLabPath "ParentDisks"
+    $ParentDisksPath = Get-DLabPath "IMGs"
     $ParentDiskFileName = $Name, 'vhdx' -Join '.'
     $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
 
@@ -99,7 +227,7 @@ function New-DLabChildDisk
         throw "`"$ParentDiskPath`" cannot be found"
     }
 
-    $ChildDisksPath = Get-DLabPath "ChildDisks"
+    $ChildDisksPath = Get-DLabPath "VHDs"
     $ChildDiskFileName = $Name, 'vhdx' -Join '.'
     $ChildDiskPath = Join-Path $ChildDisksPath $ChildDiskFileName
 
@@ -125,6 +253,81 @@ function Test-DLabVM
     [bool]$(Get-VM $Name -ErrorAction SilentlyContinue)
 }
 
+function Expand-AlpineOverlay
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $InputFile,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Destination,
+        [switch] $Force
+    )
+
+    if (Test-Path $Destination) {
+        if ($Force) {
+            Remove-Item $Destination -Recurse -ErrorAction SilentlyContinue | Out-Null
+        } else {
+            throw "`"$Destination`" already exists!"
+        }
+    }
+
+    cmd.exe /c "7z.exe x $InputFile -so | 7z x -si -ttar -o`"$Destination`""
+
+    Push-Location
+    Set-Location $Destination
+    $RootPath = Get-Item .
+    $ReparsePoints = Get-ChildItem . -Recurse | `
+        Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }
+    $ReparsePoints | ForEach-Object {
+        $Source = $_.FullName
+        $Target = $_.Target.Replace('/','\')
+        $Target = $Target.Substring($RootPath.FullName.Length)
+        Push-Location
+        Set-Location $_.Directory
+        Remove-Item $Source | Out-Null
+        New-Item -ItemType SymbolicLink -Path $Source -Target $Target | Out-Null
+        Pop-Location
+    }
+    Pop-Location
+}
+
+function Compress-AlpineOverlay
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $InputPath,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Destination,
+        [switch] $Force
+    )
+
+    if (-Not (Test-Path $InputPath -PathType 'Container')) {
+        throw "`"$InputPath`" does not exist or is not a directory"
+    }
+
+    if (-Not $Destination.EndsWith(".tar.gz")) {
+        throw "`"$Destination`" does not end in .tar.gz"
+    }
+
+    if (-Not $Destination.EndsWith(".apkovl.tar.gz")) {
+        Write-Warning -Message "`"$Destination`" does not end in .apkovl.tar.gz"
+    }
+
+    if (Test-Path $Destination) {
+        if ($Force) {
+            Remove-Item $Destination -ErrorAction SilentlyContinue | Out-Null
+        } else {
+            throw "VM `"$Destination`" already exists!"
+        }
+    }
+
+    $TarFileName = $Destination.TrimEnd(".gz") | Split-Path -Leaf
+
+    cmd.exe /c "7z a -ttar -snl -so $TarFileName `"$InputPath/*`" | 7z a -si $Destination"
+}
+
 function New-DLabRouterVM
 {
     [CmdletBinding()]
@@ -136,7 +339,9 @@ function New-DLabRouterVM
         [string] $WanSwitchName,
         [Parameter(Mandatory=$true)]
         [string] $LanSwitchName,
-        [UInt64] $DiskSize = 32GB,
+        [string] $NetworkInterfaces,
+        [string[]] $NameServers = @('1.1.1.1','1.0.0.1'),
+        [UInt64] $DiskSize = 1GB,
         [switch] $Force
     )
 
@@ -151,15 +356,57 @@ function New-DLabRouterVM
 
     $IsoFilePath = $(Get-DLabIsoFilePath "alpine").FullName
 
-    $ParentDisk = New-DLabParentDisk $Name -DiskSize $DiskSize -Force:$Force
+    $ChildDisksPath = Get-DLabPath "VHDs"
+    $DiskFileName = $Name, 'vhdx' -Join '.'
+    $DiskPath = Join-Path $ChildDisksPath $DiskFileName
+
+    $Params = @{
+        DiskPath = $DiskPath;
+        DiskSize = $DiskSize;
+        PartitionStyle = "MBR";
+        FileSystem = "FAT32";
+        FileSystemLabel = "APKOVL";
+        MountDisk = $true;
+    }
+
+    $AlpineDisk = New-DLabFormattedDisk @Params -Force:$Force
+
+    $Volumes = $AlpineDisk | Get-Partition | Get-Volume | `
+        Sort-Object -Property Size -Descending
+    $Volume = $Volumes[0]
+
+    $MountPath = "$($Volume.DriveLetter)`:"
+    $ApkOvlFileName = "alpine.apkovl.tar.gz"
+    $OverlayFile = "$MountPath\$ApkOvlFileName"
+    Copy-Item -Path "$PSScriptRoot\$ApkOvlFileName" -Destination $OverlayFile
+
+    $TempPath = Join-Path $([System.IO.Path]::GetTempPath()) "apkovl-$Name"
+    Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+
+    Expand-AlpineOverlay $OverlayFile -Destination $TempPath -Force
+
+    $ResolvConf = $($NameServers | ForEach-Object { "nameserver $_" } | Out-String).Trim()
+    Set-Content -Path $(Join-Path $TempPath "/etc/resolv.conf") -Value $ResolvConf
+
+    if (-Not [string]::IsNullOrEmpty($NetworkInterfaces)) {
+        Set-Content -Path $(Join-Path $TempPath "/etc/network/interfaces") -Value $NetworkInterfaces
+    }
+
+    Compress-AlpineOverlay $TempPath -Destination $OverlayFile -Force
+    Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+
+    $UnattendText = (Get-Content -Path "$PSScriptRoot\unattend.sh" -Raw) -Replace "`r`n", "`n"
+    [IO.File]::WriteAllText($(Join-Path $MountPath "unattend.sh"), $UnattendText)
+
+    Dismount-VHD -Path $AlpineDisk.Path
 
     $Params = @{
         Name = $Name;
-        VHDPath = $ParentDisk.Path;
-        MemoryStartupBytes = 2GB;
+        VHDPath = $AlpineDisk.Path;
+        MemoryStartupBytes = 1GB;
     }
 
-    if ($SwitchName) {
+    if ($WanSwitchName) {
         $Params['SwitchName'] = $WanSwitchName;
     }
 
@@ -176,7 +423,7 @@ function New-DLabRouterVM
 
     Set-VM @Params
 
-    Add-VMNetworkAdapter -VMName $VMName -SwitchName $LanSwitchName
+    Add-VMNetworkAdapter -VMName $Name -SwitchName $LanSwitchName
 }
 
 function New-DLabParentVM
@@ -342,7 +589,7 @@ function New-DLabAnswerFile
     }
 
     $oobeSystem = $answer.unattend.settings | Where-Object { $_.pass -Like 'oobeSystem' }
-    $component = $oobeSystem.component
+    $component = $oobeSystem.component | Where-Object { $_.name -Like 'Microsoft-Windows-Shell-Setup' }
 
     if (-Not [string]::IsNullOrEmpty($AdministratorPassword)) {
         $component.UserAccounts.AdministratorPassword.Value = $AdministratorPassword
@@ -396,7 +643,7 @@ function Wait-DLabVM
         [Parameter(Mandatory=$true,Position=0)]
         [string] $VMName,
         [Parameter(Mandatory=$true,Position=1)]
-        [ValidateSet("Heartbeat","IPAddress","Reboot","MemoryOperations","PSDirect")]
+        [ValidateSet("Heartbeat","IPAddress","Shutdown","Reboot","MemoryOperations","PSDirect")]
         [string] $Condition,
         [TimeSpan] $OldUptime,
         [string] $UserName,
@@ -413,6 +660,8 @@ function Wait-DLabVM
         $Credential = Get-DLabCredential -UserName $UserName -Password $Password
         while ((Invoke-Command -VMName $VMName -Credential $Credential `
             { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 1 }
+    } elseif ($Condition -eq 'Shutdown') {
+        while ($(Get-VM $VMName).State -ne "Off") { Start-Sleep 1 }
     } elseif ($Condition -eq 'Reboot') {
         if (-Not $PSBoundParameters.ContainsKey('OldUptime')) {
             $OldUptime = $(Get-VM $VMName).Uptime
