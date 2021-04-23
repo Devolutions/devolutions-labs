@@ -44,3 +44,17 @@ Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommon
     }
     Install-AdcsCertificationAuthority @Params -Force
 } -Session $VMSession -ArgumentList @($DomainName, $DomainUserName, $DomainPassword, $CACommonName)
+
+# Install IIS + Publish CRL over HTTP
+
+Invoke-Command -ScriptBlock {
+    Install-WindowsFeature -Name 'Web-Server' | Out-Null
+    Remove-IISSite -Name "Default Web Site" -Confirm:$false
+    $CertSrvPath = "${Env:WinDir}\System32\CertSrv"
+    New-IISSite -Name 'CertSrv' -PhysicalPath $CertSrvPath -BindingInformation "*:80:"
+    Start-IISSite -Name 'CertSrv'
+    $HttpCrlDP = Get-CACrlDistributionPoint | Where-Object { $_.Uri -Like "http://*/CertEnroll/*" }
+    Remove-CACrlDistributionPoint -Uri $HttpCrlDP.Uri -Force
+    Add-CACrlDistributionPoint -Uri $HttpCrlDP.URI -AddToCertificateCdp -AddToFreshestCrl -Force
+    Restart-Service CertSvc
+} -Session $VMSession

@@ -91,6 +91,10 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
+    Install-WindowsFeature RSAT-DNS-Server
+} -Session $VMSession
+
+Invoke-Command -ScriptBlock {
     Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
     Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 } -Session $VMSession

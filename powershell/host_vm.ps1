@@ -38,6 +38,8 @@ Install-Module DevolutionsGateway -Scope AllUsers
 Install-Module Posh-ACME -Scope AllUsers
 Install-Module PsHosts -Scope AllUsers
 
+Add-WindowsCapability -Online -Name Rsat.Dns.Tools~~~~0.0.1.0
+
 Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 
