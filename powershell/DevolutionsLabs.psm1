@@ -167,8 +167,8 @@ function New-DLabFormattedDisk
     $VirtualDisk = New-VHD -Path $DiskPath -Dynamic -SizeBytes $DiskSize
     $NewDisk = Mount-VHD -Path $VirtualDisk.Path -PassThru
 
-    Initialize-Disk -Number $NewDisk.DiskNumber -PartitionStyle $PartitionStyle | Out-Null
-    $Partition = New-Partition -DiskNumber $NewDisk.DiskNumber -AssignDriveLetter -UseMaximumSize
+    $NewDisk | Initialize-Disk -PartitionStyle $PartitionStyle | Out-Null
+    $Partition = $NewDisk | New-Partition -AssignDriveLetter -UseMaximumSize
     $Partition | Format-Volume -FileSystem $FileSystem -NewFileSystemLabel $FileSystemLabel | Out-Null
 
     if (-Not $MountDisk) {
@@ -395,7 +395,8 @@ function New-DLabRouterVM
     Compress-AlpineOverlay $TempPath -Destination $OverlayFile -Force
     Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
 
-    Copy-Item "$PSScriptRoot\unattend.sh" -Destination $(Join-Path $MountPath "unattend.sh")
+    $UnattendText = (Get-Content -Path "$PSScriptRoot\unattend.sh" -Raw) -Replace "`r`n", "`n"
+    [IO.File]::WriteAllText($(Join-Path $MountPath "unattend.sh"), $UnattendText)
 
     Dismount-VHD -Path $AlpineDisk.Path
 
