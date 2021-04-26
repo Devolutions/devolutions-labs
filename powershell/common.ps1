@@ -8,7 +8,7 @@ $LabDnsTld = ".ninja"
 $LabName = $LabPrefix.ToLower() + $LabDnsTld
 
 $UserName = "Administrator"
-$Password = "DevoLab123!"
+$Password = "DevoLabs123!"
 
 $WanSwitchName = "NAT Switch"
 $LanSwitchName = "LAN Switch"
@@ -22,6 +22,7 @@ $DefaultGateway = $RTRIpAddress
 
 $WaykRealm = $LabName
 $DomainName = "ad.$LabName"
+$DnsZoneName = $DomainName
 $DomainNetbiosName = $LabPrefix
 $SafeModeAdministratorPassword = "SafeMode123!"
 

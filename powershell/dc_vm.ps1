@@ -39,3 +39,10 @@ Invoke-Command -ScriptBlock { Param($BootTime)
             Start-Sleep 1
     }
 } -Session $VMSession -ArgumentList @($BootTime)
+
+Write-Host "Create read-only network share"
+
+Invoke-Command -ScriptBlock {
+    New-Item "C:\Shared" -ItemType "Directory" | Out-Null
+    New-SmbShare -Name "Shared" -Path "C:\Shared" -FullAccess 'ANONYMOUS LOGON','Everyone'
+} -Session $VMSession
