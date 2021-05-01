@@ -17,7 +17,7 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -IPAddress $IPAddress -DefaultGateway $DefaultGateway `
     -DnsServerAddress $DnsServerAddress
 
-# Join virtual machine to domain
+Write-Host "Joining domain"
 
 Add-DLabVMToDomain $VMName -VMSession $VMSession `
     -DomainName $DomainName -DomainController $DCHostName `
@@ -32,6 +32,8 @@ $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $Doma
 
 # Install Remote Desktop Gateway
 
+Write-Host "Installing RD Gateway, RD Web Access and RD Connection Broker"
+
 Invoke-Command -ScriptBlock {
     @('RDS-Gateway',
     'RDS-Web-Access',
@@ -42,6 +44,8 @@ Invoke-Command -ScriptBlock {
     'RSAT-RDS-Gateway'
     ) | ForEach-Object { Install-WindowsFeature -Name $_ | Out-Null }
 } -Session $VMSession
+
+Write-Host "Creating default RD CAP and RD RAP"
 
 Invoke-Command -ScriptBlock {
     $UserGroups = @("Administrators@BUILTIN", "Remote Desktop Users@BUILTIN")
@@ -68,12 +72,14 @@ Request-DLabCertificate $VMName -VMSession $VMSession `
     -CAHostName $CAHostName -CACommonName $CACommonName `
     -CertificateFile $CertificateFile -Password $CertificatePassword
 
-# Install RD Session Host (should normally be on a different machine)
+Write-Host "Installing RD Session Host"
 
 Invoke-Command -ScriptBlock {
     Install-WindowsFeature -Name RDS-RD-Server | Out-Null
     Restart-Computer -Force
 } -Session $VMSession
+
+Write-Host "Rebooting VM"
 
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
 Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
@@ -91,7 +97,7 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $WebAccessS
     $Params = @{
         ConnectionBroker = $ConnectionBroker;
         SessionHost = $SessionHost;
-        $WebAccessServer = $WebAccessServer;
+        WebAccessServer = $WebAccessServer;
     }
     New-RDSessionDeployment @Params
 
@@ -105,7 +111,7 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $WebAccessS
         -ConnectionBroker $ConnectionBroker -GatewayExternalFqdn $GatewayExternalFQDN
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $SessionHost, $WebAccessServer, $GatewayExternalFQDN)
 
-Write-Host "Configure RD Gateway certificate"
+Write-Host "Configuring RD Gateway certificate"
 
 Invoke-Command -ScriptBlock { Param($CertificateFile, $CertificatePassword)
     Import-Module RemoteDesktopServices
@@ -121,7 +127,7 @@ Invoke-Command -ScriptBlock { Param($CertificateFile, $CertificatePassword)
     Restart-Service TSGateway
 } -Session $VMSession -ArgumentList @($CertificateFile, $CertificatePassword)
 
-# Create new RD Session Collection
+Write-Host "Creating RD session collection"
 
 $CollectionName = "Session Collection"
 $CollectionDescription = "Default Session Collection"
@@ -163,11 +169,32 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $Collection
     }
     New-RDRemoteApp @Params
 
+    $CAMachineName = $Env:ComputerName -Replace "-GW", "-DC"
+    $Params = @{
+        DisplayName    = "DNS Manager";
+        FilePath       = "C:\Windows\System32\dnsmgmt.msc";
+        IconPath       = "C:\Windows\System32\dnsmgr.dll";
+        CommandLineSetting = "Allow";
+        RequiredCommandLine = "/ComputerName $CAMachineName";
+        CollectionName = $CollectionName;
+    }
+    New-RDRemoteApp @Params
+
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $SessionHost, $CollectionName, $CollectionDescription)
 
 # Install RD Web Client (HTML5)
 
-Invoke-Command -ScriptBlock {
-    Install-Module -Name RDWebClientManagement -Force
+Invoke-Command -ScriptBlock { Param($ConnectionBroker, $CertificateFile, $CertificatePassword)
+    Import-Module RemoteDesktopServices
+    $Thumbprint = $(Get-Item "RDS:\GatewayServer\SSLCertificate\Thumbprint").CurrentValue
+    @('RDGateway', 'RDWebAccess', 'RDPublishing', 'RDRedirector') | ForEach-Object {
+        Set-RDCertificate -Role $_ -Thumbprint $Thumbprint `
+            -ConnectionBroker $ConnectionBroker -Force
+    }
+    Install-Module RDWebClientManagement -Force -AcceptLicense
     Install-RDWebClientPackage
-} -Session $VMSession
+    $CertificateFile = Resolve-Path $CertificateFile
+    $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
+    Import-RDWebClientBrokerCert -Path $CertificateFile -Password $CertificatePassword
+    Publish-RDWebClientPackage -Type Production -Latest
+} -Session $VMSession -ArgumentList @($ConnectionBroker, $CertificateFile, $CertificatePassword)
