@@ -180,6 +180,16 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $Collection
     }
     New-RDRemoteApp @Params
 
+    $CollectionName = "Session Collection"
+    $TransformedName = $CollectionName -Replace " ", "_"
+    $FarmsRegPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Terminal Server\CentralPublishedResources\PublishedFarms"
+    $FarmRegName = Get-ChildItem $FarmsRegPath |
+        Where-Object { $TransformedName.StartsWith($_.PSChildName) } |
+        Select-Object -ExpandProperty PSChildName
+
+    Set-ItemProperty -Path "$FarmsRegPath\$FarmRegName\RemoteDesktops\$FarmRegName" -Name "Name" -Value "Remote Desktop"
+    Set-ItemProperty -Path "$FarmsRegPath\$FarmRegName\RemoteDesktops\$FarmRegName" -Name "ShowInPortal" -Value 1 -Type DWORD
+
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $SessionHost, $CollectionName, $CollectionDescription)
 
 # Install RD Web Client (HTML5)
