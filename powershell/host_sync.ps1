@@ -51,4 +51,11 @@ $CertSubject = (@("CN=$CAMachineName") + @($DnsZoneName -Split '\.' | ForEach-Ob
 $CACertPath = "~\ca-cert.cer"
 $AsByteStream = if ($PSEdition -eq 'Core') { @{AsByteStream = $true} } else { @{'Encoding' = 'Byte'} }
 Set-Content -Value $CACert -Path $CACertPath @AsByteStream -Force
-Import-Certificate -FilePath $CACertPath -CertStoreLocation "Cert:\LocalMachine\Root"
+
+$CertificateFile = Resolve-Path $CACertPath
+$Certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertificateFile)
+
+if (-Not (Get-ChildItem "Cert:\LocalMachine\Root" |
+        Where-Object { $_.Thumbprint -eq $Certificate.Thumbprint })) {
+    Import-Certificate -FilePath $CACertPath -CertStoreLocation "Cert:\LocalMachine\Root"
+}
