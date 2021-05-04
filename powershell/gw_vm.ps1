@@ -192,7 +192,7 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $Collection
 
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $SessionHost, $CollectionName, $CollectionDescription)
 
-# Install RD Web Client (HTML5)
+Write-Host "Installing RD Web Client"
 
 Invoke-Command -ScriptBlock { Param($ConnectionBroker, $CertificateFile, $CertificatePassword)
     Import-Module RemoteDesktopServices
@@ -208,3 +208,50 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $CertificateFile, $Certif
     Import-RDWebClientBrokerCert -Path $CertificateFile -Password $CertificatePassword
     Publish-RDWebClientPackage -Type Production -Latest
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $CertificateFile, $CertificatePassword)
+
+Write-Host "Creating DNS record for Devolutions Gateway"
+
+$DnsName = "gateway"
+$DGatewayFQDN = "$DnsName.$DomainName"
+$CertificateFile = "~\Documents\gateway-cert.pfx"
+$CertificatePassword = "cert123!"
+
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @($DnsName, $DomainName, $IPAddress, $DCHostName)
+
+Write-Host "Requesting certificate for Devolutions Gateway"
+
+Request-DLabCertificate $VMName -VMSession $VMSession `
+    -CommonName $DGatewayFQDN `
+    -CAHostName $CAHostName -CACommonName $CACommonName `
+    -CertificateFile $CertificateFile -Password $CertificatePassword
+
+Write-Host "Installing Devolutions Gateway"
+
+Invoke-Command -ScriptBlock {
+    Install-Module -Name DevolutionsGateway -Force
+    Import-Module DevolutionsGateway
+    Install-DGatewayPackage
+} -Session $VMSession
+
+Write-Host "Configuring Devolutions Gateway"
+
+Invoke-Command -ScriptBlock { Param($DGatewayFQDN, $CertificateFile, $CertificatePassword)
+    Import-Module DevolutionsGateway
+    Import-DGatewayCertificate -CertificateFile $CertificateFile -Password $CertificatePassword
+    Set-DGatewayHostname $DGatewayFQDN
+
+    Set-DGatewayListeners @(
+        $(New-DGatewayListener 'https://*:7171' 'https://*:7171'),
+        $(New-DGatewayListener 'tcp://*:8181' 'tcp://*:8181'))
+
+    $FQDN = @($DGatewayFQDN -Split '\.')
+    $FQDN[0] = 'bastion'
+    $BastionFQDN = $FQDN -Join '.'
+    Invoke-WebRequest -Uri "https://$BastionFQDN/publish/key" -OutFile "den-public.pem"
+    Import-DGatewayProvisionerKey -PublicKeyFile "den-public.pem"
+    
+    Set-Service 'DevolutionsGateway' -StartupType 'Automatic'
+    Start-Service 'DevolutionsGateway'
+} -Session $VMSession -ArgumentList @($DGatewayFQDN, $CertificateFile, $CertificatePassword)
