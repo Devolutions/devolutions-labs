@@ -7,6 +7,7 @@ $LabPrefix = "IT-HELP"
 $LabDnsTld = ".ninja"
 $LabName = $LabPrefix.ToLower() + $LabDnsTld
 
+$DomainUser = "Administrator"
 $UserName = "Administrator"
 $Password = "DevoLabs123!"
 
