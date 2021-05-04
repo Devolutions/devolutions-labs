@@ -23,6 +23,7 @@ $DefaultGateway = $RTRIpAddress
 $WaykRealm = $LabName
 $DomainName = "ad.$LabName"
 $DnsZoneName = $DomainName
+$DomainDnsName = $DomainName
 $DomainNetbiosName = $LabPrefix
 $SafeModeAdministratorPassword = "SafeMode123!"
 
