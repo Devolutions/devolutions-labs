@@ -35,7 +35,8 @@ Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
 $Password = ConvertTo-SecureString $DomainPassword -AsPlainText -Force
 Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
-$DomainAdminId = $Session.ID
+$DomainAdminEntry = Get-RDMSession -GroupName $LabFolderName -Name $DomainAdminUPN
+$DomainAdminId = $DomainAdminEntry.ID
 
 # Wayk Bastion Admin
 
@@ -131,6 +132,34 @@ $VMAliases | ForEach-Object {
     $Session = New-RDMSession @Params
     $Session.Group = $LabFolderName
     $Session.CredentialConnectionID = $DomainAdminId
+    Set-RDMSession -Session $Session -Refresh
+    Update-RDMUI
+}
+
+# RDP (Hyper-V)
+
+$VMAliases | ForEach-Object {
+    $VMAlias = $_
+    $VMName = $LabPrefix, $VMAlias -Join "-"
+
+    $VMId = $(Get-VM $VMName).Id
+    $VMHost = "localhost"
+
+    $Params = @{
+        Name = "$VMName (Hyper-V)";
+        Host = $VMHost;
+        Type = "RDPConfigured";
+    }
+
+    $Session = New-RDMSession @Params
+    $Session.Group = $LabFolderName
+    $Session.RDP.RDPType = "HyperV"
+    $Session.RDP.HyperVInstanceID = $VMId
+    $Session.RDP.FrameBufferRedirection = $false
+    $Session.RDP.UseEnhancedSessionMode = $true
+    if ($($Session.RDP | Get-Member -Name 'VMConnectImplicitCredentials')) {
+        $Session.RDP.VMConnectImplicitCredentials = $true # added in 2021.1.27
+    }
     Set-RDMSession -Session $Session -Refresh
     Update-RDMUI
 }
