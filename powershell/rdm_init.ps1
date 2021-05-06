@@ -216,9 +216,12 @@ $VMAliases | ForEach-Object {
     $VMAlias = $_
     $VMName = $LabPrefix, $VMAlias -Join "-"
 
+    $MachineName = $VMName
+    $MachineFQDN = "$MachineName.$DnsZoneName"
+
     $Params = @{
-        Name = "$VMName (WinRM)";
-        Host = $VMName;
+        Name = "$MachineName (WinRM)";
+        Host = $MachineFQDN;
         Type = "PowerShellRemoteConsole";
     }
 
@@ -248,6 +251,7 @@ $VMAliases | ForEach-Object {
     $Session = New-RDMSession @Params
     $Session.Group = $LabFolderName
     $Session.CredentialConnectionID = $DomainAdminId
+    $Session.UserNameFormat = "UserAtDomain"
     $Session.Wayk.WaykDenConnectionID = $WaykBastionEntry.ID
     $Session.Wayk.PreferredAuthType = "SecureRemoteDelegation"
     Set-RDMSession -Session $Session -Refresh
@@ -272,6 +276,7 @@ $VMAliases | ForEach-Object {
     $Session = New-RDMSession @Params
     $Session.Group = $LabFolderName
     $Session.CredentialConnectionID = $DomainAdminId
+    $Session.UserNameFormat = "UserAtDomain"
     $Session.VPN.Application = "WaykBastion"
     $Session.VPN.Enabled = $true
     $Session.VPN.Mode = "AlwaysConnect"
@@ -295,6 +300,7 @@ $VMAliases | ForEach-Object {
     $Session = New-RDMSession @Params
     $Session.Group = $LabFolderName
     $Session.CredentialConnectionID = $DomainAdminId
+    $Session.UserNameFormat = "UserAtDomain"
     $Session.PowerShell.RemoteConsoleConnectionMode = "Wayk"
     $Session.PowerShell.Version = "PowerShell7"
     $Session.VPN.Application = "WaykBastion"

@@ -6,6 +6,8 @@ $VMName = $LabPrefix, $VMAlias -Join "-"
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
+# Synchronize DNS records with hosts file
+
 $IpFilter = $LabNetworkBase -Replace "^(\d+)\.(\d+)\.(\d+).(\d+)$", "`$1.`$2.`$3.`*"
 
 $HostEntries = Invoke-Command -ScriptBlock { Param($DnsZoneName, $IpFilter)
@@ -59,3 +61,14 @@ if (-Not (Get-ChildItem "Cert:\LocalMachine\Root" |
         Where-Object { $_.Thumbprint -eq $Certificate.Thumbprint })) {
     Import-Certificate -FilePath $CACertPath -CertStoreLocation "Cert:\LocalMachine\Root"
 }
+
+# Synchronize WinRM client trusted hosts
+
+$LabTrustedHost = "*.$DnsZoneName"
+$TrustedHostsValue = $(Get-Item "WSMan:localhost\Client\TrustedHosts").Value
+$TrustedHosts = $TrustedHostsValue -Split ',' | ForEach-Object { $_.Trim() }
+if (-Not $TrustedHosts.Contains($LabTrustedHost)) {
+    $TrustedHosts = $TrustedHosts + @($LabTrustedHost)
+}
+$TrustedHostsValue = $TrustedHosts -Join ','
+Set-Item "WSMan:localhost\Client\TrustedHosts" -Value $TrustedHostsValue -Force
