@@ -47,14 +47,21 @@ Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommon
 
 # Install IIS + Publish CRL over HTTP
 
-Invoke-Command -ScriptBlock {
+Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     Install-WindowsFeature -Name 'Web-Server' | Out-Null
     Remove-IISSite -Name "Default Web Site" -Confirm:$false
     $CertSrvPath = "${Env:WinDir}\System32\CertSrv"
     New-IISSite -Name 'CertSrv' -PhysicalPath $CertSrvPath -BindingInformation "*:80:"
+    & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
+        -section:system.webServer/security/requestFiltering -allowDoubleEscaping:True /commit:apphost
     Start-IISSite -Name 'CertSrv'
     $HttpCrlDP = Get-CACrlDistributionPoint | Where-Object { $_.Uri -Like "http://*/CertEnroll/*" }
     Remove-CACrlDistributionPoint -Uri $HttpCrlDP.Uri -Force
     Add-CACrlDistributionPoint -Uri $HttpCrlDP.URI -AddToCertificateCdp -AddToFreshestCrl -Force
     Restart-Service CertSvc
-} -Session $VMSession
+    $CAConfigName = "$CAHostName\$CACommonName"
+    $CertAdmin = New-Object -COM "CertificateAuthority.Admin"
+    # PublishCRLs flags: RePublish = 0x10 (16), BaseCRL = 1, DeltaCRL = 2
+    $CertAdmin.PublishCRLs($CAConfigName, $([DateTime]::UtcNow), 17)
+    Get-ChildItem "$CertSrvPath\CertEnroll\*.crl" | ForEach-Object { certutil.exe -f -dspublish $_.FullName }
+} -Session $VMSession -ArgumentList @($CAHostName, $CACommonName)

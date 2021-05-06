@@ -59,6 +59,13 @@ New-NetFirewallRule -Name 'ICMPv4' -DisplayName 'ICMPv4' `
 & netsh advfirewall firewall set rule group="Network Discovery" new enable=yes
 & netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=yes
 
+# Enable WinRM client
+
+Set-Service 'WinRM' -StartupType 'Automatic'
+Start-Service 'WinRM'
+
+# Create Hyper-V directory structure
+
 $HyperVPath = "C:\Hyper-V"
 New-Item -ItemType Directory -Path $HyperVPath -ErrorAction SilentlyContinue | Out-Null
 
