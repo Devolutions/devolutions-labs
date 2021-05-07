@@ -16,6 +16,7 @@ Invoke-Command -ScriptBlock { Param($AdmfContextStoreName, $AdmfContextStorePath
 } -Session $VMSession -ArgumentList @($AdmfContextStoreName, $AdmfContextStorePath)
 
 $ContextPath = Join-Path $PSScriptRoot "admf"
+
 $Context = Get-Content "$ContextPath\context.json" | ConvertFrom-Json
 $Membership = Get-Content "$ContextPath\Domain\GroupMemberships\membership.json" | ConvertFrom-Json
 $Groups = Get-Content "$ContextPath\Domain\Groups\groups.json" | ConvertFrom-Json
@@ -46,3 +47,53 @@ Invoke-Command -ScriptBlock { Param()
     Test-AdmfDomain -Server $UserDnsDomain
     Invoke-AdmfDomain -Server $UserDnsDomain
 } -Session $VMSession -ArgumentList @()
+
+function New-RandomPassword {
+    param(
+        [Parameter(Position = 0)]
+        [int] $Length = 16
+    )
+
+    $charsets = @("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789")
+    $sb = [System.Text.StringBuilder]::new()
+    $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+
+    $bytes = New-Object Byte[] 4
+    0 .. ($Length - 1) | ForEach-Object {
+        $charset = $charsets[$_ % $charsets.Count]
+        $rng.GetBytes($bytes)
+        $num = [System.BitConverter]::ToUInt32($bytes, 0)
+        $sb.Append($charset[$num % $charset.Length]) | Out-Null
+    }
+
+    return $sb.ToString()
+}
+
+$ADUsers = $Membership | Where-Object { $_.ItemType -eq 'User' } | Select-Object -ExpandProperty 'Name'
+
+$ADAccounts = @()
+foreach ($ADUser in $ADUsers) {
+    $ADAccounts += [PSCustomObject]@{
+        Identity = $ADUser
+        Password = $(New-RandomPassword 16)
+    }
+}
+
+Set-Content -Path "ADAccounts.json" -Value $($ADAccounts | ConvertTo-Json) -Force
+
+$VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
+
+$ADAccounts = $(Get-Content -Path "ADAccounts.json") | ConvertFrom-Json
+
+Invoke-Command -ScriptBlock { Param($ADAccounts)
+    $ADAccounts | ForEach-Object {
+        $Identity = $_.Identity
+        $Password = ConvertTo-SecureString $_.Password -AsPlainText -Force
+        Write-Host "Setting password for $Identity"
+        try {
+            Set-ADAccountPassword -Identity $Identity -NewPassword $Password -Reset
+        } catch [Exception] {
+            Write-Output $_.Exception.GetType().FullName, $_.Exception.Message
+        }
+    }
+} -Session $VMSession -ArgumentList @(,$ADAccounts)
