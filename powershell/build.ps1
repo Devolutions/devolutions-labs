@@ -23,5 +23,15 @@ Write-Host "Creating DVLS VM..."
 $TimeDVLS = Measure-Command { .\dvls_vm.ps1 }
 Write-Host "DVLS VM creation time: $TimeDVLS"
 
-$TimeLab = $TimeRTR + $TimeDC + $TimeCA + $TimeWAYK + $TimeDVLS
+Write-Host "Creating GW VM..."
+$TimeGW = Measure-Command { .\gw_vm.ps1 }
+Write-Host "DVLS VM creation time: $TimeDVLS"
+
+Write-Host "Initializing Active Directory..."
+.\ad_init.ps1
+
+Write-Host "Initializing Remote Desktop Manager..."
+.\rdm_init.ps1
+
+$TimeLab = $TimeRTR + $TimeDC + $TimeCA + $TimeWAYK + $TimeDVLS + $TimeGW
 Write-Host "Total $LabPrefix lab creation time: $TimeLab"
