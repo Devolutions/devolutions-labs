@@ -5,6 +5,7 @@ Import-Module .\DevolutionsLabs.psm1 -Force
 
 $LabPrefix = "IT-HELP"
 $LabDnsTld = ".ninja"
+$LabCompanyName = "IT Help Ninja"
 $LabName = $LabPrefix.ToLower() + $LabDnsTld
 
 $DomainUser = "Administrator"

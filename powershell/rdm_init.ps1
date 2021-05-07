@@ -3,14 +3,65 @@
 
 Import-RdmModule
 
+$LabName = "$LabPrefix-LAB"
 $VMAliases = @("DC", "CA", "WAYK", "DVLS", "GW")
 
-# Lab Folder
+$LabDataSourceName = $LabName
+if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabDataSourceName)) {
+    $DBFileName = ($LabDataSourceName -Replace ' ', '') + ".db"
+    $Params = @{
+        Name = $LabDataSourceName;
+        SQLite = $true;
+        Database = "$Env:LocalAppData\Devolutions\RemoteDesktopManager\$DBFileName.db";
+    }
+    $DataSource = New-RDMDataSource @Params
+    Set-RDMDataSource -DataSource $DataSource
+}
 
-$LabFolderName = "$LabPrefix-LAB"
+$LabDataSource = Get-RDMDataSource -Name $LabDataSourceName
+Set-RDMCurrentDataSource -DataSource $LabDataSource
+
+# Lab Folder
+$LabFolderName = $LabCompanyName
 $LabFolder = New-RDMSession -Type "Group" -Name $LabFolderName
 $LabFolder.Group = $LabFolderName
 Set-RDMSession -Session $LabFolder -Refresh
+Update-RDMUI
+
+# Active Directory Folder
+$ADFolderName = "Active Directory"
+$ADFolder = New-RDMSession -Type "Group" -Name $ADFolderName
+$ADFolder.Group = "$LabFolderName\$ADFolderName"
+Set-RDMSession -Session $ADFolder -Refresh
+Update-RDMUI
+
+# LAN Folder
+$LANFolderName = "Local Network"
+$LANFolder = New-RDMSession -Type "Group" -Name $LANFolderName
+$LANFolder.Group = "$LabFolderName\$LANFolderName"
+Set-RDMSession -Session $LANFolder -Refresh
+Update-RDMUI
+
+# WAN Folder
+$RDGFolderName = "RD Gateway"
+$RDGFolder = New-RDMSession -Type "Group" -Name $RDGFolderName
+$RDGFolder.Group = "$LabFolderName\$RDGFolderName"
+Set-RDMSession -Session $RDGFolder -Refresh
+Update-RDMUI
+
+# Hyper-V Folder
+$HVFolderName = "Hyper-V Host"
+$HVFolder = New-RDMSession -Type "Group" -Name $HVFolderName
+$HVFolder.Group = "$LabFolderName\$HVFolderName"
+Set-RDMSession -Session $HVFolder -Refresh
+Update-RDMUI
+
+# Wayk Folder
+$WaykFolderName = "Wayk Bastion"
+$WaykFolder = New-RDMSession -Type "Group" -Name $WaykFolderName
+$WaykFolder.Group = "$LabFolderName\$WaykFolderName"
+Set-RDMSession -Session $WaykFolder -Refresh
+Update-RDMUI
 
 # Domain Administrator
 
@@ -22,10 +73,7 @@ $Params = @{
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = $LabFolderName
-Set-RDMSession -Session $Session -Refresh
-Update-RDMUI
-
+$Session.Group = "$LabFolderName\$ADFolderName"
 $Session.MetaInformation.UPN = $DomainAdminUPN
 Set-RDMSession -Session $Session -Refresh
 Update-RDMUI
@@ -35,7 +83,7 @@ Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
 $Password = ConvertTo-SecureString $DomainPassword -AsPlainText -Force
 Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
-$DomainAdminEntry = Get-RDMSession -GroupName $LabFolderName -Name $DomainAdminUPN
+$DomainAdminEntry = Get-RDMSession -GroupName "$LabFolderName\$ADFolderName" -Name $DomainAdminUPN
 $DomainAdminId = $DomainAdminEntry.ID
 
 # Wayk Bastion Admin
@@ -43,12 +91,12 @@ $DomainAdminId = $DomainAdminEntry.ID
 $WaykBastionUser = "wayk-admin"
 
 $Params = @{
-    Name = "$WaykBastionUser (bastion)"
+    Name = "$WaykBastionUser"
     Type = "Credential";
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = $LabFolderName
+$Session.Group = "$LabFolderName\$WaykFolderName"
 Set-RDMSession -Session $Session -Refresh
 Update-RDMUI
 
@@ -61,12 +109,12 @@ Set-RDMSessionPassword -ID $Session.ID -Password $Password
 $WaykBastionUser = "technician"
 
 $Params = @{
-    Name = "$WaykBastionUser (bastion)"
+    Name = "$WaykBastionUser"
     Type = "Credential";
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = $LabFolderName
+$Session.Group = "$LabFolderName\$WaykFolderName"
 Set-RDMSession -Session $Session -Refresh
 Update-RDMUI
 
@@ -86,11 +134,11 @@ $Params = @{
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = $LabFolderName
+$Session.Group = "$LabFolderName\$WaykFolderName"
 Set-RDMSession -Session $Session -Refresh
 Update-RDMUI
 
-$WaykBastionEntry = Get-RDMSession -GroupName $LabFolderName -Name $BastionFQDN | Select-Object -First 1
+$WaykBastionEntry = Get-RDMSession -GroupName "$LabFolderName\$WaykFolderName" -Name $BastionFQDN | Select-Object -First 1
 
 # RD Gateway
 
@@ -103,7 +151,7 @@ $Params = @{
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = $LabFolderName
+$Session.Group = "$LabFolderName\$RDGFolderName"
 $Session.CredentialConnectionID = $DomainAdminId
 $Session.RDP.GatewayCredentialsSource = "UserPassword"
 $Session.RDP.GatewayProfileUsageMethod = "Explicit"
@@ -112,7 +160,7 @@ $Session.RDP.GatewayUsageMethod = "ModeDirect"
 Set-RDMSession -Session $Session -Refresh
 Update-RDMUI
 
-$RDGatewayEntry = Get-RDMSession -GroupName $LabFolderName -Name $RDGatewayFQDN | Select-Object -First 1
+$RDGatewayEntry = Get-RDMSession -GroupName "$LabFolderName\$RDGFolderName" -Name $RDGatewayFQDN | Select-Object -First 1
 
 # RDP (Regular)
 
@@ -124,13 +172,13 @@ $VMAliases | ForEach-Object {
     $MachineFQDN = "$MachineName.$DnsZoneName"
 
     $Params = @{
-        Name = "$MachineName (RDP)";
+        Name = "$MachineName";
         Host = $MachineFQDN;
         Type = "RDPConfigured";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$LANFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     Set-RDMSession -Session $Session -Refresh
     Update-RDMUI
@@ -146,13 +194,13 @@ $VMAliases | ForEach-Object {
     $VMHost = "localhost"
 
     $Params = @{
-        Name = "$VMName (Hyper-V)";
+        Name = "$VMName";
         Host = $VMHost;
         Type = "RDPConfigured";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$HVFolderName"
     $Session.RDP.RDPType = "HyperV"
     $Session.RDP.HyperVInstanceID = $VMId
     $Session.RDP.FrameBufferRedirection = $false
@@ -174,13 +222,13 @@ $VMAliases | ForEach-Object {
     $MachineFQDN = "$MachineName.$DnsZoneName"
 
     $Params = @{
-        Name = "$MachineName (RD Gateway)";
+        Name = "$MachineName";
         Host = $MachineFQDN;
         Type = "RDPConfigured";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$RDGFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.VPN.Application = "Gateway"
     $Session.VPN.Enabled = $true
@@ -197,13 +245,13 @@ $VMAliases | ForEach-Object {
     $VMName = $LabPrefix, $VMAlias -Join "-"
 
     $Params = @{
-        Name = "$VMName (Hyper-V)";
+        Name = "$VMName";
         Host = $VMName;
         Type = "PowerShellRemoteConsole";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$HVFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "VMName"
     Set-RDMSession -Session $Session -Refresh
@@ -220,13 +268,13 @@ $VMAliases | ForEach-Object {
     $MachineFQDN = "$MachineName.$DnsZoneName"
 
     $Params = @{
-        Name = "$MachineName (WinRM)";
+        Name = "$MachineName";
         Host = $MachineFQDN;
         Type = "PowerShellRemoteConsole";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$LANFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
     Set-RDMSession -Session $Session -Refresh
@@ -243,13 +291,13 @@ $VMAliases | ForEach-Object {
     $MachineFQDN = "$MachineName.$DnsZoneName"
 
     $Params = @{
-        Name = "$MachineName (Wayk)";
+        Name = "$MachineName";
         Host = $MachineFQDN;
         Type = "Wayk";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$WaykFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.UserNameFormat = "UserAtDomain"
     $Session.Wayk.WaykDenConnectionID = $WaykBastionEntry.ID
@@ -268,13 +316,13 @@ $VMAliases | ForEach-Object {
     $MachineFQDN = "$MachineName.$DnsZoneName"
 
     $Params = @{
-        Name = "$MachineName (Wayk RDP)";
+        Name = "$MachineName";
         Host = $MachineFQDN;
         Type = "RDPConfigured";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$WaykFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.UserNameFormat = "UserAtDomain"
     $Session.VPN.Application = "WaykBastion"
@@ -292,13 +340,13 @@ $VMAliases | ForEach-Object {
     $VMName = $LabPrefix, $VMAlias -Join "-"
 
     $Params = @{
-        Name = "$VMName (Wayk)";
+        Name = "$VMName";
         Host = $VMName;
         Type = "PowerShellRemoteConsole";
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = $LabFolderName
+    $Session.Group = "$LabFolderName\$WaykFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.UserNameFormat = "UserAtDomain"
     $Session.PowerShell.RemoteConsoleConnectionMode = "Wayk"
@@ -309,4 +357,33 @@ $VMAliases | ForEach-Object {
     $Session.VPN.WaykBastionID = $WaykBastionEntry.ID
     Set-RDMSession -Session $Session -Refresh
     Update-RDMUI
+}
+
+# Active Directory Accounts
+
+if (Test-Path -Path "ADAccounts.json" -PathType 'Leaf') {
+    $ADAccounts = $(Get-Content -Path "ADAccounts.json") | ConvertFrom-Json
+
+    $ADAccounts | ForEach-Object {
+        $Username = $_.Identity
+        $Password = $_.Password
+        $AccountUPN = "$Username@$DomainDnsName"
+
+        $Params = @{
+            Name = $AccountUPN;
+            Type = "Credential";
+        }
+
+        $Session = New-RDMSession @Params
+        $Session.Group = "$LabFolderName\$ADFolderName"
+        $Session.MetaInformation.UPN = $AccountUPN
+        Set-RDMSession -Session $Session -Refresh
+        Update-RDMUI
+
+        Set-RDMSessionUsername -ID $Session.ID "$Username"
+        Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
+        $Password = ConvertTo-SecureString $Password -AsPlainText -Force
+        Set-RDMSessionPassword -ID $Session.ID -Password $Password
+        Update-RDMUI
+    }
 }

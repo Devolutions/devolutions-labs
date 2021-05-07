@@ -1,0 +1,86 @@
+[
+    {
+        "Name": "dford",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Management"
+    },
+    {
+        "Name": "ryoung",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Management"
+    },
+    {
+        "Name": "bowens",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Management"
+    },
+    {
+        "Name": "lgriffin",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Inside Sales"
+    },
+    {
+        "Name": "jevans",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Inside Sales"
+    },
+    {
+        "Name": "kclark",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Inside Sales"
+    },
+    {
+        "Name": "rwallace",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Inside Sales"
+    },
+    {
+        "Name": "jjohnson",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Inside Sales"
+    },
+    {
+        "Name": "kfoster",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Customer Support"
+    },
+    {
+        "Name": "dcollins",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Customer Support"
+    },
+    {
+        "Name": "smiller",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Customer Support"
+    },
+    {
+        "Name": "mmorgan",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "Customer Support"
+    },
+    {
+        "Name": "Customer Support",
+        "Domain": "%DomainName%",
+        "ItemType": "Group",
+        "Group": "Wayk Users"
+    },
+    {
+        "Name": "ldap-reader",
+        "Domain": "%DomainName%",
+        "ItemType": "User",
+        "Group": "ldap-readers"
+    }
+]
