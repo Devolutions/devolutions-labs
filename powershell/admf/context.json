@@ -1,0 +1,9 @@
+{
+  "Version": "1.0.0",
+  "Weight": 50,
+  "Description": "Devolutions Labs",
+  "Author": "Devolutions",
+  "Prerequisites": [],
+  "MutuallyExclusive": [],
+  "Group": "Default"
+}

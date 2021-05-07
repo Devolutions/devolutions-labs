@@ -1,0 +1,32 @@
+[
+    {
+        "Name": "Management",
+        "Path": "OU=Groups,OU=%RootOU%,%DomainDN%",
+        "Description": "Management",
+        "Scope": "DomainLocal"
+    },
+    {
+        "Name": "Inside Sales",
+        "Path": "OU=Groups,OU=%RootOU%,%DomainDN%",
+        "Description": "Inside Sales",
+        "Scope": "DomainLocal"
+    },
+    {
+        "Name": "Customer Support",
+        "Path": "OU=Groups,OU=%RootOU%,%DomainDN%",
+        "Description": "Customer Support",
+        "Scope": "DomainLocal"
+    },
+    {
+        "Name": "Wayk Users",
+        "Path": "OU=Groups,OU=%RootOU%,%DomainDN%",
+        "Description": "Wayk Users",
+        "Scope": "DomainLocal"
+    },
+    {
+        "Name": "ldap-readers",
+        "Path": "OU=Groups,OU=%RootOU%,%DomainDN%",
+        "Description": "LDAP readers",
+        "Scope": "DomainLocal"
+    }
+]

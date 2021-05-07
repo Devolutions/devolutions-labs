@@ -1,0 +1,17 @@
+[
+    {
+        "Name": "%RootOU%",
+        "Description": "Root container for company assets",
+        "Path": "%DomainDN%"
+    },
+    {
+        "Name": "Users",
+        "Description": "User Container",
+        "Path": "OU=%RootOU%,%DomainDN%"
+    },
+    {
+        "Name": "Groups",
+        "Description": "Group Container",
+        "Path": "OU=%RootOU%,%DomainDN%"
+    }
+]

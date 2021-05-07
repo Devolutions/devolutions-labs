@@ -1,0 +1,106 @@
+[
+    {
+        "SamAccountName": "dford",
+        "GivenName": "David",
+        "Surname": "Ford",
+        "UserPrincipalName": "dford@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "ryoung",
+        "GivenName": "Robert",
+        "Surname": "Young",
+        "UserPrincipalName": "ryoung@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "bowens",
+        "GivenName": "Barbara",
+        "Surname": "Owens",
+        "UserPrincipalName": "bowens@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "lgriffin",
+        "GivenName": "Laura",
+        "Surname": "Griffin",
+        "UserPrincipalName": "lgriffin@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "jevans",
+        "GivenName": "John",
+        "Surname": "Evans",
+        "UserPrincipalName": "jevans@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "kclark",
+        "GivenName": "Kimberly",
+        "Surname": "Clark",
+        "UserPrincipalName": "kclark@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "rwallace",
+        "GivenName": "Richard",
+        "Surname": "Wallace",
+        "UserPrincipalName": "rwallace@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "jjohnson",
+        "GivenName": "Jessica",
+        "Surname": "Johnson",
+        "UserPrincipalName": "jjohnson@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "kfoster",
+        "GivenName": "Kimberly",
+        "Surname": "Foster",
+        "UserPrincipalName": "kfoster@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "dcollins",
+        "GivenName": "Donna",
+        "Surname": "Collins",
+        "UserPrincipalName": "dcollins@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "smiller",
+        "GivenName": "Sharon",
+        "Surname": "Miller",
+        "UserPrincipalName": "smiller@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "mmorgan",
+        "GivenName": "Michael",
+        "Surname": "Morgan",
+        "UserPrincipalName": "mmorgan@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    },
+    {
+        "SamAccountName": "ldap-reader",
+        "GivenName": "LDAP",
+        "Surname": "Reader",
+        "UserPrincipalName": "ldap-reader@%DomainFqdn%",
+        "Path": "OU=Users,OU=%RootOU%,%DomainDN%",
+        "PasswordNeverExpires": true
+    }
+]
