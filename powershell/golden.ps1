@@ -44,6 +44,13 @@ Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Passw
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Invoke-Command -ScriptBlock {
+    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
+    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
+} -Session $VMSession
+
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+
+Invoke-Command -ScriptBlock {
     Set-ExecutionPolicy Unrestricted -Force
     Install-PackageProvider Nuget -Force
     Install-Module -Name PowerShellGet -Force
