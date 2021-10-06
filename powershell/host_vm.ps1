@@ -31,10 +31,6 @@ New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Ou
 Install-Module Microsoft.PowerShell.SecretManagement -Scope AllUsers
 Install-Module Microsoft.PowerShell.SecretStore -Scope AllUsers
 
-Install-Module RdmHelper -Scope AllUsers
-Install-Module WaykClient -Scope AllUsers
-Install-Module WaykBastion -Scope AllUsers
-Install-Module DevolutionsGateway -Scope AllUsers
 Install-Module Posh-ACME -Scope AllUsers
 Install-Module PsHosts -Scope AllUsers
 

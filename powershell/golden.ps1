@@ -82,9 +82,6 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
-    Install-Module RdmHelper -Scope AllUsers
-    Install-Module WaykClient -Scope AllUsers
-    Install-Module WaykBastion -Scope AllUsers
     Install-Module DevolutionsGateway -Scope AllUsers
     Install-Module Posh-ACME -Scope AllUsers
     Install-Module PsHosts -Scope AllUsers

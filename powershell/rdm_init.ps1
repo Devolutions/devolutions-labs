@@ -1,10 +1,10 @@
 
 . .\common.ps1
 
-Import-RdmModule
+Import-Module RemoteDesktopManager
 
 $LabName = "$LabPrefix-LAB"
-$VMAliases = @("DC", "CA", "WAYK", "DVLS", "GW")
+$VMAliases = @("DC", "CA", "DVLS", "GW")
 
 $LabDataSourceName = $LabName
 if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabDataSourceName)) {

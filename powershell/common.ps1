@@ -22,7 +22,6 @@ $RTRVMNumber = 2
 $RTRIpAddress = Get-DLabIpAddress $LabNetworkBase $RTRVMNumber
 $DefaultGateway = $RTRIpAddress
 
-$WaykRealm = $LabName
 $DomainName = "ad.$LabName"
 $DnsZoneName = $DomainName
 $DomainDnsName = $DomainName

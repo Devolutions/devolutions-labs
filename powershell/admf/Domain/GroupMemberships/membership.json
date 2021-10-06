@@ -75,7 +75,7 @@
         "Name": "Customer Support",
         "Domain": "%DomainName%",
         "ItemType": "Group",
-        "Group": "Wayk Users"
+        "Group": "RDM Users"
     },
     {
         "Name": "ldap-reader",
