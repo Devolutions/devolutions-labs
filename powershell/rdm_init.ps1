@@ -56,13 +56,6 @@ $HVFolder.Group = "$LabFolderName\$HVFolderName"
 Set-RDMSession -Session $HVFolder -Refresh
 Update-RDMUI
 
-# Wayk Folder
-$WaykFolderName = "Wayk Bastion"
-$WaykFolder = New-RDMSession -Type "Group" -Name $WaykFolderName
-$WaykFolder.Group = "$LabFolderName\$WaykFolderName"
-Set-RDMSession -Session $WaykFolder -Refresh
-Update-RDMUI
-
 # Domain Administrator
 
 $DomainAdminUPN = "Administrator@$DomainDnsName"
@@ -85,60 +78,6 @@ Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
 $DomainAdminEntry = Get-RDMSession -GroupName "$LabFolderName\$ADFolderName" -Name $DomainAdminUPN
 $DomainAdminId = $DomainAdminEntry.ID
-
-# Wayk Bastion Admin
-
-$WaykBastionUser = "wayk-admin"
-
-$Params = @{
-    Name = "$WaykBastionUser"
-    Type = "Credential";
-}
-
-$Session = New-RDMSession @Params
-$Session.Group = "$LabFolderName\$WaykFolderName"
-Set-RDMSession -Session $Session -Refresh
-Update-RDMUI
-
-Set-RDMSessionUsername -ID $Session.ID $WaykBastionUser
-$Password = ConvertTo-SecureString "WaykBastion123!" -AsPlainText -Force
-Set-RDMSessionPassword -ID $Session.ID -Password $Password
-
-# Wayk Bastion Technician
-
-$WaykBastionUser = "technician"
-
-$Params = @{
-    Name = "$WaykBastionUser"
-    Type = "Credential";
-}
-
-$Session = New-RDMSession @Params
-$Session.Group = "$LabFolderName\$WaykFolderName"
-Set-RDMSession -Session $Session -Refresh
-Update-RDMUI
-
-Set-RDMSessionUsername -ID $Session.ID $WaykBastionUser
-$Password = ConvertTo-SecureString "Technician123!" -AsPlainText -Force
-Set-RDMSessionPassword -ID $Session.ID -Password $Password
-
-# Wayk Bastion
-
-$BastionFQDN = "bastion.$DnsZoneName"
-$BastionURL = "https://$BastionFQDN"
-
-$Params = @{
-    Name = $BastionFQDN;
-    Host = $BastionURL;
-    Type = "WaykDenConsole";
-}
-
-$Session = New-RDMSession @Params
-$Session.Group = "$LabFolderName\$WaykFolderName"
-Set-RDMSession -Session $Session -Refresh
-Update-RDMUI
-
-$WaykBastionEntry = Get-RDMSession -GroupName "$LabFolderName\$WaykFolderName" -Name $BastionFQDN | Select-Object -First 1
 
 # RD Gateway
 
@@ -277,84 +216,6 @@ $VMAliases | ForEach-Object {
     $Session.Group = "$LabFolderName\$LANFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
-}
-
-# Wayk Remote Desktop
-
-$VMAliases | ForEach-Object {
-    $VMAlias = $_
-    $VMName = $LabPrefix, $VMAlias -Join "-"
-
-    $MachineName = $VMName
-    $MachineFQDN = "$MachineName.$DnsZoneName"
-
-    $Params = @{
-        Name = "$MachineName";
-        Host = $MachineFQDN;
-        Type = "Wayk";
-    }
-
-    $Session = New-RDMSession @Params
-    $Session.Group = "$LabFolderName\$WaykFolderName"
-    $Session.CredentialConnectionID = $DomainAdminId
-    $Session.UserNameFormat = "UserAtDomain"
-    $Session.Wayk.WaykDenConnectionID = $WaykBastionEntry.ID
-    $Session.Wayk.PreferredAuthType = "SecureRemoteDelegation"
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
-}
-
-# Wayk RDP
-
-$VMAliases | ForEach-Object {
-    $VMAlias = $_
-    $VMName = $LabPrefix, $VMAlias -Join "-"
-
-    $MachineName = $VMName
-    $MachineFQDN = "$MachineName.$DnsZoneName"
-
-    $Params = @{
-        Name = "$MachineName";
-        Host = $MachineFQDN;
-        Type = "RDPConfigured";
-    }
-
-    $Session = New-RDMSession @Params
-    $Session.Group = "$LabFolderName\$WaykFolderName"
-    $Session.CredentialConnectionID = $DomainAdminId
-    $Session.UserNameFormat = "UserAtDomain"
-    $Session.VPN.Application = "WaykBastion"
-    $Session.VPN.Enabled = $true
-    $Session.VPN.Mode = "AlwaysConnect"
-    $Session.VPN.WaykBastionID = $WaykBastionEntry.ID
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
-}
-
-# Wayk PowerShell Remoting
-
-$VMAliases | ForEach-Object {
-    $VMAlias = $_
-    $VMName = $LabPrefix, $VMAlias -Join "-"
-
-    $Params = @{
-        Name = "$VMName";
-        Host = $VMName;
-        Type = "PowerShellRemoteConsole";
-    }
-
-    $Session = New-RDMSession @Params
-    $Session.Group = "$LabFolderName\$WaykFolderName"
-    $Session.CredentialConnectionID = $DomainAdminId
-    $Session.UserNameFormat = "UserAtDomain"
-    $Session.PowerShell.RemoteConsoleConnectionMode = "Wayk"
-    $Session.PowerShell.Version = "PowerShell7"
-    $Session.VPN.Application = "WaykBastion"
-    $Session.VPN.Enabled = $true
-    $Session.VPN.Mode = "AlwaysConnect"
-    $Session.VPN.WaykBastionID = $WaykBastionEntry.ID
     Set-RDMSession -Session $Session -Refresh
     Update-RDMUI
 }
