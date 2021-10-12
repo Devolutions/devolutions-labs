@@ -193,6 +193,7 @@ $VMAliases | ForEach-Object {
     $Session.Group = "$LabFolderName\$HVFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "VMName"
+    $Session.PowerShell.Run64BitsMode = $true
     Set-RDMSession -Session $Session -Refresh
     Update-RDMUI
 }
@@ -216,6 +217,7 @@ $VMAliases | ForEach-Object {
     $Session.Group = "$LabFolderName\$LANFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
+    $Session.PowerShell.Run64BitsMode = $true
     Set-RDMSession -Session $Session -Refresh
     Update-RDMUI
 }
