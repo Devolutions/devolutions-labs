@@ -34,7 +34,9 @@ function Invoke-HostInit {
         }
     }
 
-    choco install -y 7zip
+    if (-Not (Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue)) {
+        choco install -y 7zip
+    }
 
     Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit –Value 0
 
@@ -92,7 +94,7 @@ function Invoke-HostInit {
     }
     $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*($SwitchName)" }
     if ($(Get-NetIpAddress -InterfaceIndex $NetAdapter.IfIndex).IPAddress -ne $IPAddress) {
-        Remove-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -Force
+        Remove-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -Confirm:$false
         New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress $IPAddress -PrefixLength 24
         Set-DnsClientServerAddress -InterfaceIndex $NetAdapter.IfIndex -ServerAddresses @()
     }
@@ -108,7 +110,7 @@ function Invoke-HostInit {
     }
     $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*($SwitchName)" }
     if ($(Get-NetIpAddress -InterfaceIndex $NetAdapter.IfIndex).IPAddress -ne $IPAddress) {
-        Remove-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -Force
+        Remove-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -Confirm:$false
         New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress $IPAddress -PrefixLength 24
     }
     if (-Not (Get-NetNat -Name $NatName -ErrorAction SilentlyContinue)) {
