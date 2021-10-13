@@ -2,9 +2,10 @@
 Set-ExecutionPolicy Unrestricted -Force
 Install-PackageProvider Nuget -Force
 Install-Module -Name PowerShellGet -Force
-Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
 
-iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+if (-Not (Get-Command -Name choco -CommandType Application -ErrorAction SilentlyContinue)) {
+    iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+}
 
 choco install -y git
 choco install -y vlc
@@ -28,32 +29,14 @@ $RegPath = "HKLM:\Software\Policies\Mozilla\Firefox\Certificates"
 New-Item -Path $RegPath -Force | Out-Null
 New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
 
-Install-Module Microsoft.PowerShell.SecretManagement -Scope AllUsers
-Install-Module Microsoft.PowerShell.SecretStore -Scope AllUsers
-
-Install-Module Posh-ACME -Scope AllUsers
-Install-Module PsHosts -Scope AllUsers
+Install-Module PsHosts -Scope AllUsers -Force
 
 Add-WindowsCapability -Online -Name Rsat.Dns.Tools~~~~0.0.1.0
-
 Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 
-iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
-
-Install-Module -Name Microsoft.PowerShell.RemotingTools -Scope AllUsers
-Set-Service -Name sshd -StartupType 'Automatic'
-Start-Service sshd
-
-& "${Env:ProgramFiles}\PowerShell\7\pwsh.exe" -NoLogo -Command "Enable-SSHRemoting -Force"
-Restart-Service sshd
-
-New-NetFirewallRule -Name 'ICMPv4' -DisplayName 'ICMPv4' `
-    -Description 'Allow ICMPv4' -Profile Any -Direction Inbound -Action Allow `
-    -Protocol ICMPv4 -Program Any -LocalAddress Any -RemoteAddress Any
-
-& netsh advfirewall firewall set rule group="Network Discovery" new enable=yes
-& netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=yes
+if (-Not (Get-Command -Name pwsh -CommandType Application -ErrorAction SilentlyContinue)) {
+    iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
+}
 
 # Enable WinRM client
 
@@ -73,7 +56,7 @@ New-Item -ItemType Directory -Path $HyperVPath -ErrorAction SilentlyContinue | O
 # To avoid logging in to the Visual Studio subscriber download portal inside the VM, one trick
 # is to start the download from another computer and then grab the short-lived download URL.
 
-# en_windows_server_2019_updated_april_2021_x64_dvd_ef6373f0.iso
+# en_windows_server_2019_updated_jun_2021_x64_dvd_a2a2f782.iso
 
 # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 
@@ -89,16 +72,38 @@ if (-Not $(Test-Path -Path $AlpineIsoDownloadPath -PathType 'Leaf')) {
 }
 
 # Create LAN switch for the host and VMs
-New-VMSwitch –SwitchName "LAN Switch" –SwitchType Internal –Verbose
-$NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(LAN Switch)" }
-New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.10.0.1 -PrefixLength 24
-Set-DnsClientServerAddress -InterfaceIndex $NetAdapter.IfIndex -ServerAddresses @()
+
+$SwitchName = "LAN Switch"
+$IPAddress = "10.10.0.1"
+if (-Not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
+    New-VMSwitch –SwitchName $SwitchName –SwitchType Internal –Verbose
+}
+$NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*($SwitchName)" }
+if ($(Get-NetIpAddress -InterfaceIndex $NetAdapter.IfIndex).IPAddress -ne $IPAddress) {
+    Remove-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -Force
+    New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress $IPAddress -PrefixLength 24
+    Set-DnsClientServerAddress -InterfaceIndex $NetAdapter.IfIndex -ServerAddresses @()
+}
 
 # Create NAT switch for the router VM WAN
-New-VMSwitch –SwitchName "NAT Switch" –SwitchType Internal –Verbose
-$NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*(NAT Switch)" }
-New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress 10.9.0.1 -PrefixLength 24
-New-NetNat –Name NatNetwork –InternalIPInterfaceAddressPrefix 10.9.0.0/24
 
-# Requires a boot (do it at the end)
-Enable-WindowsOptionalFeature -Online -FeatureName $("Microsoft-Hyper-V", "Containers") -All
+$SwitchName = "NAT Switch"
+$IPAddress = "10.9.0.1"
+$NatName = "NatNetwork"
+$NatPrefix = "10.9.0.0/24"
+if (-Not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
+    New-VMSwitch –SwitchName $SwitchName –SwitchType Internal –Verbose
+}
+$NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*($SwitchName)" }
+if ($(Get-NetIpAddress -InterfaceIndex $NetAdapter.IfIndex).IPAddress -ne $IPAddress) {
+    Remove-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -Force
+    New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress $IPAddress -PrefixLength 24
+}
+if (-Not (Get-NetNat -Name $NatName -ErrorAction SilentlyContinue)) {
+    New-NetNat –Name $NatName –InternalIPInterfaceAddressPrefix $NatPrefix
+}
+
+# Enable Hyper-V (requires a reboot)
+if ($(Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Hyper-V").State -ne 'Enabled') {
+    Enable-WindowsOptionalFeature -Online -FeatureName @("Microsoft-Hyper-V") -All -NoRestart
+}
