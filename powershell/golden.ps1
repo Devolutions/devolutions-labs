@@ -2,7 +2,7 @@
 Import-Module .\DevolutionsLabs.psm1 -Force
 
 $VMName = "IT-TEMPLATE"
-$SwitchName = "Default Switch"
+$SwitchName = "NAT Switch"
 $UserName = "Administrator"
 $Password = "lab123!"
 
@@ -42,6 +42,11 @@ Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue 
 
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+
+Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
+    -SwitchName $SwitchName -NetAdapterName "vEthernet (LAN)" `
+    -IPAddress "10.9.0.249" -DefaultGateway "10.9.0.1" `
+    -DnsServerAddress "1.1.1.1"
 
 Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
