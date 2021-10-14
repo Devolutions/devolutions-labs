@@ -44,12 +44,20 @@ function Invoke-HostInit {
     New-Item -Path $RegPath -Force | Out-Null
     New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
 
-    Install-Module PsHosts -Scope AllUsers -Force
+    if ($(Get-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0").State -ne "Installed") {
+        Add-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0"
+    }
 
-    Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+    if (-Not (Get-InstalledModule PsHosts -ErrorAction SilentlyContinue)) {
+        Install-Module PsHosts -Scope AllUsers -Force
+    }
 
     if (-Not (Get-Command -Name pwsh -CommandType Application -ErrorAction SilentlyContinue)) {
         iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
+    }
+
+    if (-Not (Get-InstalledModule RemoteDesktopManager -ErrorAction SilentlyContinue)) {
+        Install-Module RemoteDesktopManager -Scope AllUsers -Force
     }
 
     # Enable WinRM client

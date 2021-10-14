@@ -6,6 +6,8 @@ Import-Module RemoteDesktopManager
 $LabName = "$LabPrefix-LAB"
 $VMAliases = @("DC", "CA", "DVLS", "GW")
 
+$Refresh = $true
+
 $LabDataSourceName = $LabName
 if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabDataSourceName)) {
     $DBFileName = ($LabDataSourceName -Replace ' ', '') + ".db"
@@ -25,36 +27,31 @@ Set-RDMCurrentDataSource -DataSource $LabDataSource
 $LabFolderName = $LabCompanyName
 $LabFolder = New-RDMSession -Type "Group" -Name $LabFolderName
 $LabFolder.Group = $LabFolderName
-Set-RDMSession -Session $LabFolder -Refresh
-Update-RDMUI
+Set-RDMSession -Session $LabFolder -Refresh:$Refresh
 
 # Active Directory Folder
 $ADFolderName = "Active Directory"
 $ADFolder = New-RDMSession -Type "Group" -Name $ADFolderName
 $ADFolder.Group = "$LabFolderName\$ADFolderName"
-Set-RDMSession -Session $ADFolder -Refresh
-Update-RDMUI
+Set-RDMSession -Session $ADFolder -Refresh:$Refresh
 
 # LAN Folder
 $LANFolderName = "Local Network"
 $LANFolder = New-RDMSession -Type "Group" -Name $LANFolderName
 $LANFolder.Group = "$LabFolderName\$LANFolderName"
-Set-RDMSession -Session $LANFolder -Refresh
-Update-RDMUI
+Set-RDMSession -Session $LANFolder -Refresh:$Refresh
 
 # WAN Folder
 $RDGFolderName = "RD Gateway"
 $RDGFolder = New-RDMSession -Type "Group" -Name $RDGFolderName
 $RDGFolder.Group = "$LabFolderName\$RDGFolderName"
-Set-RDMSession -Session $RDGFolder -Refresh
-Update-RDMUI
+Set-RDMSession -Session $RDGFolder -Refresh:$Refresh
 
 # Hyper-V Folder
 $HVFolderName = "Hyper-V Host"
 $HVFolder = New-RDMSession -Type "Group" -Name $HVFolderName
 $HVFolder.Group = "$LabFolderName\$HVFolderName"
-Set-RDMSession -Session $HVFolder -Refresh
-Update-RDMUI
+Set-RDMSession -Session $HVFolder -Refresh:$Refresh
 
 # Domain Administrator
 
@@ -68,8 +65,7 @@ $Params = @{
 $Session = New-RDMSession @Params
 $Session.Group = "$LabFolderName\$ADFolderName"
 $Session.MetaInformation.UPN = $DomainAdminUPN
-Set-RDMSession -Session $Session -Refresh
-Update-RDMUI
+Set-RDMSession -Session $Session -Refresh:$Refresh
 
 Set-RDMSessionUsername -ID $Session.ID "Administrator"
 Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
@@ -96,8 +92,7 @@ $Session.RDP.GatewayCredentialsSource = "UserPassword"
 $Session.RDP.GatewayProfileUsageMethod = "Explicit"
 $Session.RDP.GatewaySelection = "SpecificGateway"
 $Session.RDP.GatewayUsageMethod = "ModeDirect"
-Set-RDMSession -Session $Session -Refresh
-Update-RDMUI
+Set-RDMSession -Session $Session -Refresh:$Refresh
 
 $RDGatewayEntry = Get-RDMSession -GroupName "$LabFolderName\$RDGFolderName" -Name $RDGatewayFQDN | Select-Object -First 1
 
@@ -119,8 +114,7 @@ $VMAliases | ForEach-Object {
     $Session = New-RDMSession @Params
     $Session.Group = "$LabFolderName\$LANFolderName"
     $Session.CredentialConnectionID = $DomainAdminId
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
+    Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
 # RDP (Hyper-V)
@@ -147,8 +141,7 @@ $VMAliases | ForEach-Object {
     if ($($Session.RDP | Get-Member -Name 'VMConnectImplicitCredentials')) {
         $Session.RDP.VMConnectImplicitCredentials = $true # added in 2021.1.27
     }
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
+    Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
 # RDP (RD Gateway)
@@ -173,8 +166,7 @@ $VMAliases | ForEach-Object {
     $Session.VPN.Enabled = $true
     $Session.VPN.Mode = "AlwaysConnect"
     $Session.VPN.ExistingGatewayID = $RDGatewayEntry.ID
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
+    Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
 # PowerShell (Hyper-V)
@@ -194,8 +186,7 @@ $VMAliases | ForEach-Object {
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "VMName"
     $Session.PowerShell.Run64BitsMode = $true
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
+    Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
 # PowerShell (WinRM)
@@ -218,8 +209,7 @@ $VMAliases | ForEach-Object {
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
     $Session.PowerShell.Run64BitsMode = $true
-    Set-RDMSession -Session $Session -Refresh
-    Update-RDMUI
+    Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
 # Active Directory Accounts
@@ -240,13 +230,11 @@ if (Test-Path -Path "ADAccounts.json" -PathType 'Leaf') {
         $Session = New-RDMSession @Params
         $Session.Group = "$LabFolderName\$ADFolderName"
         $Session.MetaInformation.UPN = $AccountUPN
-        Set-RDMSession -Session $Session -Refresh
-        Update-RDMUI
+        Set-RDMSession -Session $Session -Refresh:$Refresh
 
         Set-RDMSessionUsername -ID $Session.ID "$Username"
         Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
         $Password = ConvertTo-SecureString $Password -AsPlainText -Force
         Set-RDMSessionPassword -ID $Session.ID -Password $Password
-        Update-RDMUI
     }
 }
