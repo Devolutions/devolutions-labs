@@ -3,18 +3,21 @@
 
 Import-Module RemoteDesktopManager
 
+$Refresh = $true
+$ErrorActionPreference = "Stop"
+
 $LabName = "$LabPrefix-LAB"
 $VMAliases = @("DC", "CA", "DVLS", "GW")
-
-$Refresh = $true
 
 $LabDataSourceName = $LabName
 if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabDataSourceName)) {
     $DBFileName = ($LabDataSourceName -Replace ' ', '') + ".db"
+    $DBFilePath = "$Env:LocalAppData\Devolutions\RemoteDesktopManager\$DBFileName"
+    Remove-Item -Path $DBFilePath -ErrorAction SilentlyContinue | Out-Null
     $Params = @{
         Name = $LabDataSourceName;
         SQLite = $true;
-        Database = "$Env:LocalAppData\Devolutions\RemoteDesktopManager\$DBFileName.db";
+        Database = $DBFilePath;
     }
     $DataSource = New-RDMDataSource @Params
     Set-RDMDataSource -DataSource $DataSource
