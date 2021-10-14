@@ -92,3 +92,18 @@ Request-DLabCertificate $VMName -VMSession $VMSession `
     -CommonName $DvlsHostName `
     -CAHostName $CAHostName -CACommonName $CACommonName `
     -CertificateFile $CertificateFile -Password $CertificatePassword
+
+<#
+Install-Module -Name SqlServer -Scope AllUsers -AllowClobber
+Import-Module SqlServer
+$DatabaseName = "DVLS"
+$SqlInstance = "localhost\SQLEXPRESS"
+$SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
+$Database = New-Object Microsoft.SqlServer.Management.Smo.Database($SqlServer, $DatabaseName)
+$Database.Create()
+
+$SqlUsername = "dvls"
+$SqlPassword = "dvls123!"
+$SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
+$Credential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
+#>

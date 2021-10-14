@@ -67,10 +67,14 @@ if (-Not (Get-ChildItem "Cert:\LocalMachine\Root" |
 $LabTrustedHost = "*.$DnsZoneName"
 $TrustedHostsValue = $(Get-Item "WSMan:localhost\Client\TrustedHosts").Value
 if ($TrustedHostsValue -ne '*') {
-    [string[]]$TrustedHosts = $TrustedHostsValue -Split ',' | ForEach-Object { $_.Trim() }
-    if (-Not $TrustedHosts.Contains($LabTrustedHost)) {
-        $TrustedHosts += @($LabTrustedHost)
+    if ([string]::IsNullOrEmpty($TrustedHostsValue)) {
+        $TrustedHostsValue = $LabTrustedHost
+    } else {
+        $TrustedHosts = $TrustedHostsValue -Split ',' | ForEach-Object { $_.Trim() }
+        if (-Not $TrustedHosts.Contains($LabTrustedHost)) {
+            $TrustedHosts += @($LabTrustedHost)
+        }
+        $TrustedHostsValue = $TrustedHosts -Join ','
     }
-    $TrustedHostsValue = $TrustedHosts -Join ','
     Set-Item "WSMan:localhost\Client\TrustedHosts" -Value $TrustedHostsValue -Force
 }
