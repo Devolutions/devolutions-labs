@@ -73,7 +73,30 @@ Write-Host "Installing SQL Server Express"
 
 Invoke-Command -ScriptBlock {
     choco install -y --no-progress sql-server-express
+    choco install -y --no-progress sql-server-management-studio
 } -Session $VMSession
+
+Write-Host "Creating SQL database for DVLS"
+
+$DatabaseName = "dvls"
+$SqlInstance = "localhost\SQLEXPRESS"
+
+Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance)
+    Install-Module -Name SqlServer -Scope AllUsers -AllowClobber
+    Import-Module SqlServer
+    $SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
+    $Database = New-Object Microsoft.SqlServer.Management.Smo.Database($SqlServer, $DatabaseName)
+    $Database.Create()
+} -Session $VMSession
+
+<#
+# https://www.fosstechnix.com/how-to-enable-sa-account-in-sql-server/
+$SqlUsername = "dvls"
+$SqlPassword = "dvls123!"
+$SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
+$SqlCredential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
+Add-SqlLogin -ServerInstance $SqlInstance -LoginPSCredential $SqlCredential -LoginType SqlLogin
+#>
 
 $DvlsHostName = "dvls.$DomainName"
 $CertificateFile = "~\Documents\cert.pfx"
@@ -92,18 +115,3 @@ Request-DLabCertificate $VMName -VMSession $VMSession `
     -CommonName $DvlsHostName `
     -CAHostName $CAHostName -CACommonName $CACommonName `
     -CertificateFile $CertificateFile -Password $CertificatePassword
-
-<#
-Install-Module -Name SqlServer -Scope AllUsers -AllowClobber
-Import-Module SqlServer
-$DatabaseName = "DVLS"
-$SqlInstance = "localhost\SQLEXPRESS"
-$SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
-$Database = New-Object Microsoft.SqlServer.Management.Smo.Database($SqlServer, $DatabaseName)
-$Database.Create()
-
-$SqlUsername = "dvls"
-$SqlPassword = "dvls123!"
-$SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
-$Credential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
-#>
