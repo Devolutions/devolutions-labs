@@ -49,7 +49,13 @@ Last but not least, run the host synchronization script to make it possible to r
 
 ## Remote Desktop Manager
 
-The build.ps1 script automatically calls ad_init.ps1 and rdm_init.ps1 to initialize the isolated Active Directory environment and create an RDM data source with entries for everything the lab provides. Just launch Remote Desktop Manager and look for the the "IT-HELP-LAB" data source and start experimenting with it!
+Launch Remote Desktop Manager, then run the rdm_init.ps1 script to create and initialize a new data source called "IT-HELP-LAB"
+
+```powershell
+.\rdm_init.ps1
+```
+
+You will need to restart Remote Desktop Manager after running the script to see the new data source in the list.
 
 ## Azure Lab Services
 

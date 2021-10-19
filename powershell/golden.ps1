@@ -76,6 +76,7 @@ Invoke-Command -ScriptBlock {
     choco install -y openssl
     choco install -y kdiff3
     choco install -y filezilla
+    choco install -y winpcap
     choco install -y wireshark
     choco install -y sysinternals
     choco install -y sublimetext3

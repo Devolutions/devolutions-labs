@@ -26,8 +26,5 @@ Write-Host "DVLS VM creation time: $TimeDVLS"
 Write-Host "Initializing Active Directory..."
 .\ad_init.ps1
 
-Write-Host "Initializing Remote Desktop Manager..."
-.\rdm_init.ps1
-
 $TimeLab = $TimeRTR + $TimeDC + $TimeCA + $TimeDVLS + $TimeGW
 Write-Host "Total $LabPrefix lab creation time: $TimeLab"

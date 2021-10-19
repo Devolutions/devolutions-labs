@@ -1,7 +1,7 @@
 
 . .\common.ps1
 
-Import-Module RemoteDesktopManager
+Import-Module RemoteDesktopManager -Force
 
 $Refresh = $true
 $ErrorActionPreference = "Stop"
@@ -141,9 +141,7 @@ $VMAliases | ForEach-Object {
     $Session.RDP.HyperVInstanceID = $VMId
     $Session.RDP.FrameBufferRedirection = $false
     $Session.RDP.UseEnhancedSessionMode = $true
-    if ($($Session.RDP | Get-Member -Name 'VMConnectImplicitCredentials')) {
-        $Session.RDP.VMConnectImplicitCredentials = $true # added in 2021.1.27
-    }
+    $Session.RDP.VMConnectImplicitCredentials = $true
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 

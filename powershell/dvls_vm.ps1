@@ -81,22 +81,25 @@ Write-Host "Creating SQL database for DVLS"
 $DatabaseName = "dvls"
 $SqlInstance = "localhost\SQLEXPRESS"
 
+$SqlUsername = "dvls"
+$SqlPassword = "sql123!"
+
 Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance)
-    Install-Module -Name SqlServer -Scope AllUsers -AllowClobber
+    Install-Module -Name SqlServer -Scope AllUsers -AllowClobber -Force
     Import-Module SqlServer
     $SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
+    $SqlServer.Settings.LoginMode = [Microsoft.SqlServer.Management.SMO.ServerLoginMode]::Mixed
+    $SqlServer.Alter()
     $Database = New-Object Microsoft.SqlServer.Management.Smo.Database($SqlServer, $DatabaseName)
     $Database.Create()
 } -Session $VMSession
 
-<#
-# https://www.fosstechnix.com/how-to-enable-sa-account-in-sql-server/
-$SqlUsername = "dvls"
-$SqlPassword = "dvls123!"
-$SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
-$SqlCredential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
-Add-SqlLogin -ServerInstance $SqlInstance -LoginPSCredential $SqlCredential -LoginType SqlLogin
-#>
+Invoke-Command -ScriptBlock { Param($SqlInstance, $SqlUsername, $SqlPassword)
+    Import-Module SqlServer
+    $SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
+    $SqlCredential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
+    Add-SqlLogin -ServerInstance $SqlInstance -LoginPSCredential $SqlCredential -LoginType SqlLogin -Enable
+} -Session $VMSession
 
 $DvlsHostName = "dvls.$DomainName"
 $CertificateFile = "~\Documents\cert.pfx"
