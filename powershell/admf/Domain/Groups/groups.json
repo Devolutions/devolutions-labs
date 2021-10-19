@@ -18,9 +18,9 @@
         "Scope": "DomainLocal"
     },
     {
-        "Name": "Wayk Users",
+        "Name": "RDM Users",
         "Path": "OU=Groups,OU=%RootOU%,%DomainDN%",
-        "Description": "Wayk Users",
+        "Description": "RDM Users",
         "Scope": "DomainLocal"
     },
     {

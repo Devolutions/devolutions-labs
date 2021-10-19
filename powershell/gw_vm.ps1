@@ -245,12 +245,6 @@ Invoke-Command -ScriptBlock { Param($DGatewayFQDN, $CertificateFile, $Certificat
     Set-DGatewayListeners @(
         $(New-DGatewayListener 'https://*:7171' 'https://*:7171'),
         $(New-DGatewayListener 'tcp://*:8181' 'tcp://*:8181'))
-
-    $FQDN = @($DGatewayFQDN -Split '\.')
-    $FQDN[0] = 'bastion'
-    $BastionFQDN = $FQDN -Join '.'
-    Invoke-WebRequest -Uri "https://$BastionFQDN/publish/key" -OutFile "den-public.pem"
-    Import-DGatewayProvisionerKey -PublicKeyFile "den-public.pem"
     
     Set-Service 'DevolutionsGateway' -StartupType 'Automatic'
     Start-Service 'DevolutionsGateway'

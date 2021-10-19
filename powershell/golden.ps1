@@ -2,7 +2,7 @@
 Import-Module .\DevolutionsLabs.psm1 -Force
 
 $VMName = "IT-TEMPLATE"
-$SwitchName = "Default Switch"
+$SwitchName = "NAT Switch"
 $UserName = "Administrator"
 $Password = "lab123!"
 
@@ -43,6 +43,18 @@ Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue 
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
+Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
+    -SwitchName $SwitchName -NetAdapterName "vEthernet (LAN)" `
+    -IPAddress "10.9.0.249" -DefaultGateway "10.9.0.1" `
+    -DnsServerAddress "1.1.1.1"
+
+Invoke-Command -ScriptBlock {
+    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
+    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
+} -Session $VMSession
+
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+
 Invoke-Command -ScriptBlock {
     Set-ExecutionPolicy Unrestricted -Force
     Install-PackageProvider Nuget -Force
@@ -64,6 +76,7 @@ Invoke-Command -ScriptBlock {
     choco install -y openssl
     choco install -y kdiff3
     choco install -y filezilla
+    choco install -y winpcap
     choco install -y wireshark
     choco install -y sysinternals
     choco install -y sublimetext3
@@ -82,9 +95,6 @@ Invoke-Command -ScriptBlock {
 } -Session $VMSession
 
 Invoke-Command -ScriptBlock {
-    Install-Module RdmHelper -Scope AllUsers
-    Install-Module WaykClient -Scope AllUsers
-    Install-Module WaykBastion -Scope AllUsers
     Install-Module DevolutionsGateway -Scope AllUsers
     Install-Module Posh-ACME -Scope AllUsers
     Install-Module PsHosts -Scope AllUsers

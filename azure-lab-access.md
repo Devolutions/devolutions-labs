@@ -49,8 +49,7 @@ The lab is composed of multiple virtual machines:
 * IT-HELP-RTR: Network router
 * IT-HELP-DC: Domain controller
 * IT-HELP-CA: Certificate authority
-* IT-HELP-WAYK: Wayk Bastion host
-* IT-HELP-DVLS: Devolutions Server (coming soon)
+* IT-HELP-DVLS: Devolutions Server
 * IT-HELP-GW: RD Gateway, Devolutions Gateway
 
 The RDM connection entries are structured in folders:
@@ -59,7 +58,6 @@ The RDM connection entries are structured in folders:
 * Hyper-V Host: RDP and PowerShell Hyper-V connections
 * Local Network: RDP and PowerShell network connections
 * RD Gateway: RDP connections through RD Gateway
-* Wayk Bastion: Wayk Remote Desktop, Wayk RDP and Wayk PowerShell connections through Wayk Bastion
 
 ## Disconnecting from the lab VM
 
