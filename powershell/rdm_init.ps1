@@ -7,7 +7,7 @@ $Refresh = $true
 $ErrorActionPreference = "Stop"
 
 $LabName = "$LabPrefix-LAB"
-$VMAliases = @("DC", "CA", "DVLS", "GW")
+$VMAliases = @("DC", "CA", "DVLS", "GW", "WAC")
 
 $LabDataSourceName = $LabName
 if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabDataSourceName)) {
