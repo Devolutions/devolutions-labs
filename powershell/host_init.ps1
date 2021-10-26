@@ -53,7 +53,7 @@ function Invoke-HostInit {
     }
 
     if (-Not (Get-Command -Name pwsh -CommandType Application -ErrorAction SilentlyContinue)) {
-        iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
+        &([ScriptBlock]::Create((irm "https://aka.ms/install-powershell.ps1"))) -UseMSI -Quiet
     }
 
     if (-Not (Get-InstalledModule RemoteDesktopManager -ErrorAction SilentlyContinue)) {
@@ -78,7 +78,7 @@ function Invoke-HostInit {
     # To avoid logging in to the Visual Studio subscriber download portal inside the VM, one trick
     # is to start the download from another computer and then grab the short-lived download URL.
 
-    # en_windows_server_2019_updated_jun_2021_x64_dvd_a2a2f782.iso
+    # en-us_windows_server_2019_updated_aug_2021_x64_dvd_a6431a28.iso
 
     # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 
@@ -91,6 +91,11 @@ function Invoke-HostInit {
     if (-Not $(Test-Path -Path $AlpineIsoDownloadPath -PathType 'Leaf')) {
         Write-Host "Downloading $AlpineIsoDownloadUrl"
         curl.exe $AlpineIsoDownloadUrl -o $AlpineIsoDownloadPath
+    }
+
+    # Enable Hyper-V (requires a reboot)
+    if ($(Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Hyper-V").State -ne 'Enabled') {
+        Enable-WindowsOptionalFeature -Online -FeatureName @("Microsoft-Hyper-V") -All -NoRestart
     }
 
     # Create LAN switch for the host and VMs
@@ -123,11 +128,6 @@ function Invoke-HostInit {
     }
     if (-Not (Get-NetNat -Name $NatName -ErrorAction SilentlyContinue)) {
         New-NetNat –Name $NatName –InternalIPInterfaceAddressPrefix $NatPrefix
-    }
-
-    # Enable Hyper-V (requires a reboot)
-    if ($(Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Hyper-V").State -ne 'Enabled') {
-        Enable-WindowsOptionalFeature -Online -FeatureName @("Microsoft-Hyper-V") -All -NoRestart
     }
 }
 
