@@ -48,6 +48,7 @@ Invoke-Command -ScriptBlock {
 Write-Host "Creating default RD CAP and RD RAP"
 
 Invoke-Command -ScriptBlock {
+    Import-Module RemoteDesktopServices
     $UserGroups = @("Administrators@BUILTIN", "Remote Desktop Users@BUILTIN")
     New-Item -Path RDS:\GatewayServer\CAP -Name "RD-CAP" -UserGroups $UserGroups -AuthMethod 1
     New-Item -Path RDS:\GatewayServer\RAP -Name "RD-RAP" -UserGroups $UserGroups -ComputerGroupType 2
@@ -100,9 +101,6 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $WebAccessS
         WebAccessServer = $WebAccessServer;
     }
     New-RDSessionDeployment @Params
-
-    Add-RDServer -Server $SessionHost -Role RDS-RD-SERVER `
-        -ConnectionBroker $ConnectionBroker
  
     Add-RDServer -Server $ConnectionBroker -Role RDS-Licensing `
         -ConnectionBroker $ConnectionBroker

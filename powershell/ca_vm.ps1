@@ -59,6 +59,7 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     Remove-CACrlDistributionPoint -Uri $HttpCrlDP.Uri -Force
     Add-CACrlDistributionPoint -Uri $HttpCrlDP.URI -AddToCertificateCdp -AddToFreshestCrl -Force
     Restart-Service CertSvc
+    Start-Sleep -Seconds 2 # Wait for CertSvc
     $CAConfigName = "$CAHostName\$CACommonName"
     $CertAdmin = New-Object -COM "CertificateAuthority.Admin"
     # PublishCRLs flags: RePublish = 0x10 (16), BaseCRL = 1, DeltaCRL = 2

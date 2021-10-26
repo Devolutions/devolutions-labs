@@ -86,20 +86,20 @@ $SqlPassword = "sql123!"
 
 Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance)
     Install-Module -Name SqlServer -Scope AllUsers -AllowClobber -Force
-    Import-Module SqlServer
+    Import-Module SqlServer -Force
     $SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
     $SqlServer.Settings.LoginMode = [Microsoft.SqlServer.Management.SMO.ServerLoginMode]::Mixed
     $SqlServer.Alter()
     $Database = New-Object Microsoft.SqlServer.Management.Smo.Database($SqlServer, $DatabaseName)
     $Database.Create()
-} -Session $VMSession
+} -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance)
 
 Invoke-Command -ScriptBlock { Param($SqlInstance, $SqlUsername, $SqlPassword)
-    Import-Module SqlServer
+    Import-Module SqlServer -Force
     $SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
     $SqlCredential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
     Add-SqlLogin -ServerInstance $SqlInstance -LoginPSCredential $SqlCredential -LoginType SqlLogin -Enable
-} -Session $VMSession
+} -Session $VMSession -ArgumentList @($SqlInstance, $SqlUsername, $SqlPassword)
 
 $DvlsHostName = "dvls.$DomainName"
 $CertificateFile = "~\Documents\cert.pfx"
