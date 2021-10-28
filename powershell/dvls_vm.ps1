@@ -102,6 +102,7 @@ Invoke-Command -ScriptBlock { Param($SqlInstance, $SqlUsername, $SqlPassword)
 } -Session $VMSession -ArgumentList @($SqlInstance, $SqlUsername, $SqlPassword)
 
 $DvlsHostName = "dvls.$DomainName"
+$DvlsVersion = "2021.2.10.0"
 $CertificateFile = "~\Documents\cert.pfx"
 $CertificatePassword = "cert123!"
 
@@ -118,3 +119,43 @@ Request-DLabCertificate $VMName -VMSession $VMSession `
     -CommonName $DvlsHostName `
     -CAHostName $CAHostName -CACommonName $CACommonName `
     -CertificateFile $CertificateFile -Password $CertificatePassword
+
+Write-Host "Creating Devolutions Server IIS site"
+
+Invoke-Command -ScriptBlock { Param($DvlsHostName, $CertificateFile, $CertificatePassword)
+    $DvlsPort = 443;
+    $PhysicalPath = "C:\inetpub\dvlsroot"
+    New-Item -Path $PhysicalPath -ItemType 'Directory' -ErrorAction SilentlyContinue | Out-Null
+    $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
+    $Params = @{
+        FilePath          = $CertificateFile;
+        CertStoreLocation = "cert:\LocalMachine\My";
+        Password          = $CertificatePassword;
+        Exportable        = $true;
+    }
+    $Certificate = Import-PfxCertificate @Params
+    $CertificateThumbprint = $Certificate.Thumbprint
+    $BindingInformation = '*:' + $DvlsPort + ':' + $DvlsHostName
+    $Params = @{
+        Name = "DVLS";
+        Protocol = "https";
+        SslFlag = "Sni";
+        PhysicalPath = $PhysicalPath;
+        BindingInformation = $BindingInformation;
+        CertStoreLocation = "cert:\LocalMachine\My";
+        CertificateThumbprint = $CertificateThumbprint;
+    }
+    New-IISSite @Params
+} -Session $VMSession -ArgumentList @($DvlsHostName, $CertificateFile, $CertificatePassword)
+
+Write-Host "Installing Devolutions Console"
+
+Invoke-Command -ScriptBlock { Param($DvlsVersion)
+    $ProgressPreference = 'SilentlyContinue'
+    $DownloadBaseUrl = "https://cdn.devolutions.net/download"
+    $DvlsConsoleExe = "$(Resolve-Path ~)\Documents\Setup.DVLS.Console.exe"
+    $DvlsWebAppZip = "$(Resolve-Path ~)\Documents\DVLS.${DvlsVersion}.zip"
+    Invoke-WebRequest "$DownloadBaseUrl/Setup.DPS.Console.${DvlsVersion}.exe" -OutFile $DvlsConsoleExe
+    Invoke-WebRequest "$DownloadBaseUrl/RDMS/DVLS.${DvlsVersion}.zip" -OutFile $DvlsWebAppZip
+    Start-Process -FilePath $DvlsConsoleExe -ArgumentList @('/qn') -Wait
+} -Session $VMSession -ArgumentList @($DvlsVersion)
