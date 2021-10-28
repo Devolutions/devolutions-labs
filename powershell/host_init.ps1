@@ -10,35 +10,35 @@ function Invoke-HostInit {
         Install-PackageProvider Nuget -Force
         Install-Module -Name PowerShellGet -Force
     }
-    
+
     if (-Not (Get-Command -Name choco -CommandType Application -ErrorAction SilentlyContinue)) {
         iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
     }
-    
+
     if ($IncludeOptional) {
-        choco install -y git
-        choco install -y vlc
-        choco install -y gsudo
-        choco install -y firefox
-        choco install -y vscode
-        choco install -y openssl
-        choco install -y kdiff3
-        choco install -y filezilla
-        choco install -y wireshark
-        choco install -y sysinternals
-        choco install -y sublimetext3
-        choco install -y notepadplusplus
-    
+        choco install -y --no-progress git
+        choco install -y --no-progress vlc
+        choco install -y --no-progress gsudo
+        choco install -y --no-progress firefox
+        choco install -y --no-progress vscode
+        choco install -y --no-progress openssl
+        choco install -y --no-progress kdiff3
+        choco install -y --no-progress filezilla
+        choco install -y --no-progress wireshark
+        choco install -y --no-progress sysinternals
+        choco install -y --no-progress sublimetext3
+        choco install -y --no-progress notepadplusplus
+
         if ([System.Environment]::OSVersion.Version.Build -ge 18362) {
-            choco install -y microsoft-windows-terminal
+            choco install -y --no-progress microsoft-windows-terminal
         }
     }
 
     if (-Not (Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue)) {
-        choco install -y 7zip
+        choco install -y --no-progress 7zip
     }
 
-    Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit –Value 0
+    Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit -Value 0
 
     $RegPath = "HKLM:\Software\Policies\Mozilla\Firefox\Certificates"
     New-Item -Path $RegPath -Force | Out-Null
@@ -103,7 +103,7 @@ function Invoke-HostInit {
     $SwitchName = "LAN Switch"
     $IPAddress = "10.10.0.1"
     if (-Not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
-        New-VMSwitch –SwitchName $SwitchName –SwitchType Internal –Verbose
+        New-VMSwitch -SwitchName $SwitchName -SwitchType Internal -Verbose
     }
     $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*($SwitchName)" }
     if ($(Get-NetIpAddress -InterfaceIndex $NetAdapter.IfIndex).IPAddress -ne $IPAddress) {
@@ -119,7 +119,7 @@ function Invoke-HostInit {
     $NatName = "NatNetwork"
     $NatPrefix = "10.9.0.0/24"
     if (-Not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
-        New-VMSwitch –SwitchName $SwitchName –SwitchType Internal –Verbose
+        New-VMSwitch -SwitchName $SwitchName -SwitchType Internal -Verbose
     }
     $NetAdapter = Get-NetAdapter | Where-Object { $_.Name -Like "*($SwitchName)" }
     if ($(Get-NetIpAddress -InterfaceIndex $NetAdapter.IfIndex).IPAddress -ne $IPAddress) {
@@ -127,7 +127,7 @@ function Invoke-HostInit {
         New-NetIPAddress -InterfaceIndex $NetAdapter.IfIndex -IPAddress $IPAddress -PrefixLength 24
     }
     if (-Not (Get-NetNat -Name $NatName -ErrorAction SilentlyContinue)) {
-        New-NetNat –Name $NatName –InternalIPInterfaceAddressPrefix $NatPrefix
+        New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $NatPrefix
     }
 }
 
