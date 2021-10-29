@@ -94,6 +94,8 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance)
     $Database.Create()
     $Database.RecoveryModel = "simple"
     $Database.Alter()
+    Get-Service -Name 'MSSQL$SQLEXPRESS' | Restart-Service
+    Start-Sleep -Seconds 2
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance)
 
 Write-Host "Creating SQL user for DVLS"
@@ -191,7 +193,10 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath,
     $ProgressPreference = 'SilentlyContinue'
     $DownloadBaseUrl = "https://cdn.devolutions.net/download"
     $DvlsWebAppZip = "$(Resolve-Path ~)\Documents\DVLS.${DvlsVersion}.zip"
-    Invoke-WebRequest "$DownloadBaseUrl/RDMS/DVLS.${DvlsVersion}.zip" -OutFile $DvlsWebAppZip
+
+    if (-Not $(Test-Path -Path $DvlsWebAppZip -PathType 'Leaf')) {
+        Invoke-WebRequest "$DownloadBaseUrl/RDMS/DVLS.${DvlsVersion}.zip" -OutFile $DvlsWebAppZip
+    }
 
     $BackupKeysPassword = "DvlsBackupKeys123!"
     $BackupKeysPath = "$(Resolve-Path ~)\Documents\DvlsBackupKeys"
