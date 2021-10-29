@@ -53,6 +53,17 @@ Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
 } -Session $VMSession
 
+Invoke-Command -ScriptBlock {
+    $ServerManagerReg = "HKLM:\SOFTWARE\Microsoft\ServerManager"
+    Set-ItemProperty -Path $ServerManagerReg -Name 'DoNotPopWACConsoleAtSMLaunch' -Value '1' -Type DWORD
+    Set-ItemProperty -Path $ServerManagerReg -Name 'DoNotOpenServerManagerAtLogon' -Value '1' -Type DWORD
+} -Session $VMSession
+
+Invoke-Command -ScriptBlock {
+    $ActivationReg = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\Activation"
+    Set-ItemProperty -Path $ActivationReg -Name 'Manual' -Value '1' -Type DWORD
+} -Session $VMSession
+
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 Invoke-Command -ScriptBlock {
