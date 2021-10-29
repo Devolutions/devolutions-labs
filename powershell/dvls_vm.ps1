@@ -96,6 +96,8 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance)
     $Database.Alter()
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance)
 
+Write-Host "Creating SQL user for DVLS"
+
 Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
     Import-Module SqlServer -Force
     $SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
@@ -110,8 +112,13 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     Add-SqlLogin @Params
     $SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
     $Database = $SqlServer.Databases[$DatabaseName]
-    $Database.SetOwner($SqlUsername)
+    $Database.SetOwner('sa')
     $Database.Alter()
+    $User = New-Object Microsoft.SqlServer.Management.Smo.User($Database, $SqlUsername)
+    $User.Login = $SqlUsername
+    $User.Create()
+    $Role = $Database.Roles['db_owner']
+    $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
 $DvlsVersion = "2021.2.10.0"
@@ -192,14 +199,13 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath,
 
     $DvlsConsoleArgs = @(
         "server", "install",
-        "-v", "--acceptEula",
+        "-v", "--acceptEula", "-q",
         "--adminUsername=$DvlsAdminUsername",
         "--adminPassword=$DvlsAdminPassword",
         "--adminEmail=$DvlsAdminEmail",
-        "--dpsPath=DVLS",
         "--installZip=`"$DvlsWebAppZip`"",
+        "--dps-path=`"$DvlsPath`""
         "--website=`"DVLS`"",
-        "--webApplicationName=`"DVLS`"",
         "--serverName=`"Devolutions Server`"",
         "--backupKeysPath=`"$BackupKeysPath`"",
         "--backupKeysPassword=$BackupKeysPassword",
