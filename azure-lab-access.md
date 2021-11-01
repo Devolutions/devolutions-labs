@@ -1,6 +1,6 @@
 # Azure Lab Access
 
-Welcome to Devolutions Labs! Chances are that you are on this page because you have received an email invitation to an [Azure Lab Services](https://azure.microsoft.com/en-us/services/lab-services/) virtual machine preconfigured with [Remote Desktop Manager](https://remotedesktopmanager.com/) and [Wayk Bastion](https://wayk.devolutions.net/). Each lab environment contains a complete, usable Windows domain with multiple machines that you can connect to for testing at your own pace.
+Welcome to Devolutions Labs! Chances are that you are on this page because you have received an email invitation to an [Azure Lab Services](https://azure.microsoft.com/en-us/services/lab-services/) virtual machine preconfigured with [Remote Desktop Manager](https://remotedesktopmanager.com/) and [Devolutions Server](https://server.devolutions.net/). Each lab environment contains a complete, usable Windows domain with multiple machines that you can connect to for testing at your own pace.
 
 ## Accepting the invitation
 
@@ -14,7 +14,7 @@ To accept the invitation, you need a Microsoft account. This can be a personal o
 
 ![Lab VM - Stopped](./images/azure_lab_vm_stopped.png)
 
-The virtual machine is initially stopped, so click on the toggle button to start it, then wait a few minutes:
+The virtual machine is initially stopped, so click on the toggle button to start it, then wait a few minutes (5):
 
 ![Lab VM - Starting](./images/azure_lab_vm_starting.png)
 
@@ -40,7 +40,7 @@ You can then paste the RDP host information manually into an RDP client to initi
 
 ## Lab environment overview
 
-If everything worked, you should now have access to a Windows 10 virtual machine with Hyper-V and multiple nested virtual machines. Launch Remote Desktop Manager to find the all the connection entries and the credentials you may need. The Wayk Bastion web interface is hosted at [https://bastion.ad.it-help.ninja]
+If everything worked, you should now have access to a Windows 10 virtual machine with Hyper-V and multiple nested virtual machines. Launch Remote Desktop Manager to find the all the connection entries and the credentials you may need. The Devolutions Server web interface is hosted at [https://dvls.ad.it-help.ninja]
 
 ![Lab VM - Logged In](./images/azure_lab_vm_logged_in.png)
 
@@ -51,6 +51,7 @@ The lab is composed of multiple virtual machines:
 * IT-HELP-CA: Certificate authority
 * IT-HELP-DVLS: Devolutions Server
 * IT-HELP-GW: RD Gateway, Devolutions Gateway
+* IT-HELP-WAC: Windows Admin Center
 
 The RDM connection entries are structured in folders:
 
@@ -58,15 +59,12 @@ The RDM connection entries are structured in folders:
 * Hyper-V Host: RDP and PowerShell Hyper-V connections
 * Local Network: RDP and PowerShell network connections
 * RD Gateway: RDP connections through RD Gateway
+* Devolutions Gateway: Connections through Devolutions Gateway
 
 ## Disconnecting from the lab VM
 
 Simply disconnecting from the VM will leave it running for 15 minutes before it becomes deallocated. To avoid wasting allocated minutes, it is better to manually stop the VM in Azure Lab Services:
 
-![Lab VM - Stopped](./images/azure_lab_vm_stopping.png)
+![Lab VM - Stopping](./images/azure_lab_vm_stopping.png)
 
-It can take a few minutes for the virtual machine to be marked as stopped. However, you do not need to wait with the browser open for the process to complete:
-
-![Lab VM - Stopped](./images/azure_lab_vm_stopped.png)
-
-Once stopped, the virtual machine can be started again at a later time to connect again, until all the hours in the assigned quota have been used.
+It can take a few minutes for the virtual machine to be marked as stopped. Once stopped, the virtual machine can be started again at a later time to connect again, until all the hours in the assigned quota have been used.
