@@ -26,35 +26,70 @@ if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabD
 $LabDataSource = Get-RDMDataSource -Name $LabDataSourceName
 Set-RDMCurrentDataSource -DataSource $LabDataSource
 
+function Test-RDMGroup
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name
+    )
+
+	[bool] $(Get-RDMSession -GroupName $Name -ErrorAction SilentlyContinue)
+}
+
 # Lab Folder
 $LabFolderName = $LabCompanyName
-$LabFolder = New-RDMSession -Type "Group" -Name $LabFolderName
-$LabFolder.Group = $LabFolderName
-Set-RDMSession -Session $LabFolder -Refresh:$Refresh
+$LabGroupName = $LabFolderName
+if (-Not (Test-RDMGroup $LabGroupName)) {
+    $LabFolder = New-RDMSession -Type "Group" -Name $LabFolderName
+    $LabFolder.Group = $LabGroupName
+    Set-RDMSession -Session $LabFolder -Refresh:$Refresh
+}
 
 # Active Directory Folder
 $ADFolderName = "Active Directory"
-$ADFolder = New-RDMSession -Type "Group" -Name $ADFolderName
-$ADFolder.Group = "$LabFolderName\$ADFolderName"
-Set-RDMSession -Session $ADFolder -Refresh:$Refresh
+$ADGroupName = "$LabFolderName\$ADFolderName"
+if (-Not (Test-RDMGroup $ADGroupName)) {
+    $ADFolder = New-RDMSession -Type "Group" -Name $ADFolderName
+    $ADFolder.Group = $ADGroupName
+    Set-RDMSession -Session $ADFolder -Refresh:$Refresh
+}
 
-# LAN Folder
+# Local Network Folder
 $LANFolderName = "Local Network"
-$LANFolder = New-RDMSession -Type "Group" -Name $LANFolderName
-$LANFolder.Group = "$LabFolderName\$LANFolderName"
-Set-RDMSession -Session $LANFolder -Refresh:$Refresh
+$LANGroupName = "$LabFolderName\$LANFolderName"
+if (-Not (Test-RDMGroup $LANGroupName)) {
+    $LANFolder = New-RDMSession -Type "Group" -Name $LANFolderName
+    $LANFolder.Group = $LANGroupName
+    Set-RDMSession -Session $LANFolder -Refresh:$Refresh
+}
 
-# WAN Folder
+# RD Gateway Folder
 $RDGFolderName = "RD Gateway"
-$RDGFolder = New-RDMSession -Type "Group" -Name $RDGFolderName
-$RDGFolder.Group = "$LabFolderName\$RDGFolderName"
-Set-RDMSession -Session $RDGFolder -Refresh:$Refresh
+$RDGGroupName = "$LabFolderName\$RDGFolderName"
+if (-Not (Test-RDMGroup $RDGGroupName)) {
+    $RDGFolder = New-RDMSession -Type "Group" -Name $RDGFolderName
+    $RDGFolder.Group = $RDGGroupName
+    Set-RDMSession -Session $RDGFolder -Refresh:$Refresh
+}
+
+# Devolutions Gateway Folder
+$DGWFolderName = "Devolutions Gateway"
+$DGWGroupName = "$LabFolderName\$DGWFolderName"
+if (-Not (Test-RDMGroup $DGWGroupName)) {
+    $DGWFolder = New-RDMSession -Type "Group" -Name $DGWFolderName
+    $DGWFolder.Group = $DGWGroupName
+    Set-RDMSession -Session $DGWFolder -Refresh:$Refresh
+}
 
 # Hyper-V Folder
 $HVFolderName = "Hyper-V Host"
-$HVFolder = New-RDMSession -Type "Group" -Name $HVFolderName
-$HVFolder.Group = "$LabFolderName\$HVFolderName"
-Set-RDMSession -Session $HVFolder -Refresh:$Refresh
+$HVGroupName = "$LabFolderName\$HVFolderName"
+if (-Not (Test-RDMGroup $HVGroupName)) {
+    $HVFolder = New-RDMSession -Type "Group" -Name $HVFolderName
+    $HVFolder.Group = $HVGroupName
+    Set-RDMSession -Session $HVFolder -Refresh:$Refresh
+}
 
 # Domain Administrator
 
@@ -66,7 +101,7 @@ $Params = @{
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = "$LabFolderName\$ADFolderName"
+$Session.Group = $ADGroupName
 $Session.MetaInformation.UPN = $DomainAdminUPN
 Set-RDMSession -Session $Session -Refresh:$Refresh
 
@@ -75,7 +110,7 @@ Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
 $Password = ConvertTo-SecureString $DomainPassword -AsPlainText -Force
 Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
-$DomainAdminEntry = Get-RDMSession -GroupName "$LabFolderName\$ADFolderName" -Name $DomainAdminUPN
+$DomainAdminEntry = Get-RDMSession -GroupName $ADGroupName -Name $DomainAdminUPN
 $DomainAdminId = $DomainAdminEntry.ID
 
 # RD Gateway
@@ -89,7 +124,7 @@ $Params = @{
 }
 
 $Session = New-RDMSession @Params
-$Session.Group = "$LabFolderName\$RDGFolderName"
+$Session.Group = $RDGGroupName
 $Session.CredentialConnectionID = $DomainAdminId
 $Session.RDP.GatewayCredentialsSource = "UserPassword"
 $Session.RDP.GatewayProfileUsageMethod = "Explicit"
@@ -97,7 +132,7 @@ $Session.RDP.GatewaySelection = "SpecificGateway"
 $Session.RDP.GatewayUsageMethod = "ModeDirect"
 Set-RDMSession -Session $Session -Refresh:$Refresh
 
-$RDGatewayEntry = Get-RDMSession -GroupName "$LabFolderName\$RDGFolderName" -Name $RDGatewayFQDN | Select-Object -First 1
+$RDGatewayEntry = Get-RDMSession -GroupName $RDGGroupName -Name $RDGatewayFQDN | Select-Object -First 1
 
 # RDP (Regular)
 
@@ -161,12 +196,33 @@ $VMAliases | ForEach-Object {
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = "$LabFolderName\$RDGFolderName"
+    $Session.Group = $RDGGroupName
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.VPN.Application = "Gateway"
     $Session.VPN.Enabled = $true
     $Session.VPN.Mode = "AlwaysConnect"
     $Session.VPN.ExistingGatewayID = $RDGatewayEntry.ID
+    Set-RDMSession -Session $Session -Refresh:$Refresh
+}
+
+# RDP (Devolutions Gateway)
+
+$VMAliases | ForEach-Object {
+    $VMAlias = $_
+    $VMName = $LabPrefix, $VMAlias -Join "-"
+
+    $MachineName = $VMName
+    $MachineFQDN = "$MachineName.$DnsZoneName"
+
+    $Params = @{
+        Name = "$MachineName";
+        Host = $MachineFQDN;
+        Type = "RDPConfigured";
+    }
+
+    $Session = New-RDMSession @Params
+    $Session.Group = $DGWGroupName
+    $Session.CredentialConnectionID = $DomainAdminId
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
@@ -183,8 +239,9 @@ $VMAliases | ForEach-Object {
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = "$LabFolderName\$HVFolderName"
+    $Session.Group = $HVGroupName
     $Session.CredentialConnectionID = $DomainAdminId
+    $Session.PowerShell.Host = $Params.Host
     $Session.PowerShell.RemoteConsoleConnectionMode = "VMName"
     $Session.PowerShell.Run64BitsMode = $true
     Set-RDMSession -Session $Session -Refresh:$Refresh
@@ -206,8 +263,9 @@ $VMAliases | ForEach-Object {
     }
 
     $Session = New-RDMSession @Params
-    $Session.Group = "$LabFolderName\$LANFolderName"
+    $Session.Group = $LANGroupName
     $Session.CredentialConnectionID = $DomainAdminId
+    $Session.PowerShell.Host = $Params.Host
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
     $Session.PowerShell.Run64BitsMode = $true
     Set-RDMSession -Session $Session -Refresh:$Refresh
@@ -229,7 +287,7 @@ if (Test-Path -Path "ADAccounts.json" -PathType 'Leaf') {
         }
 
         $Session = New-RDMSession @Params
-        $Session.Group = "$LabFolderName\$ADFolderName"
+        $Session.Group = $ADGroupName
         $Session.MetaInformation.UPN = $AccountUPN
         Set-RDMSession -Session $Session -Refresh:$Refresh
 
