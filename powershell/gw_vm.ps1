@@ -247,3 +247,58 @@ Invoke-Command -ScriptBlock { Param($DGatewayFQDN, $CertificateFile, $Certificat
     Set-Service 'DevolutionsGateway' -StartupType 'Automatic'
     Start-Service 'DevolutionsGateway'
 } -Session $VMSession -ArgumentList @($DGatewayFQDN, $CertificateFile, $CertificatePassword)
+
+Write-Host "Creating DNS record for KDC Proxy"
+
+$DnsName = "kdc"
+$KdcPort = "4343"
+$KdcFQDN = "$DnsName.$DomainName"
+$CertificateFile = "~\Documents\kdc-cert.pfx"
+$CertificatePassword = "cert123!"
+
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @($DnsName, $DomainName, $IPAddress, $DCHostName)
+
+Write-Host "Requesting certificate for KDC Proxy"
+
+Request-DLabCertificate $VMName -VMSession $VMSession `
+    -CommonName $KdcFQDN `
+    -CAHostName $CAHostName -CACommonName $CACommonName `
+    -CertificateFile $CertificateFile -Password $CertificatePassword
+
+Write-Host "Importing certificate for KDC Proxy"
+
+Invoke-Command -ScriptBlock { Param($CertificateFile, $CertificatePassword)
+    $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
+    $Params = @{
+        FilePath          = $CertificateFile;
+        CertStoreLocation = "cert:\LocalMachine\My";
+        Password          = $CertificatePassword;
+        Exportable        = $true;
+    }
+    $Certificate = Import-PfxCertificate @Params
+} -Session $VMSession -ArgumentList @($CertificateFile, $CertificatePassword)
+
+Write-Host "Configuring KDC Proxy"
+
+Invoke-Command -ScriptBlock { Param($KdcFQDN, $KdcPort)
+    $Certificate = Get-ChildItem -Path "cert:\LocalMachine\My" | `
+        Where-Object { $_.Subject -Like "*$KdcFQDN*" } | Select-Object -First 1
+
+    $CertHash = $Certificate.Thumbprint
+    $AppId = [Guid]::NewGuid().ToString("B")
+    
+    & "netsh" "http" "add" "urlacl" "url=https://+:$KdcPort/KdcProxy" 'user="NT AUTHORITY\Network Service"'
+    & "netsh" "http" "add" "sslcert" "hostnameport=$KdcFQDN`:$KdcPort" "certhash=$CertHash" "appid=$AppId" "certstorename=MY"
+
+    $KpsSvcSettingsReg = "HKLM:\SYSTEM\CurrentControlSet\Services\KPSSVC\Settings"
+    New-ItemProperty -Path $KpsSvcSettingsReg -Name "HttpsClientAuth" -Type DWORD -Value 0 -Force
+    New-ItemProperty -Path $KpsSvcSettingsReg -Name "DisallowUnprotectedPasswordAuth" -Type DWORD -Value 0 -Force
+    New-ItemProperty -Path $KpsSvcSettingsReg -Name "HttpsUrlGroup" -Type MultiString -Value "+`:$KdcPort" -Force
+
+    Set-Service -Name KPSSVC -StartupType Automatic
+    Start-Service -Name KPSSVC
+
+    New-NetFirewallRule -DisplayName "Allow KDCProxy TCP $KdcPort" -Direction Inbound -Protocol TCP -LocalPort $KdcPort
+} -Session $VMSession -ArgumentList @($KdcFQDN, $KdcPort)
