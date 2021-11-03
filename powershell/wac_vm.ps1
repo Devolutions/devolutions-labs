@@ -41,6 +41,14 @@ Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServ
     Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
 } -Session $VMSession -ArgumentList @($DnsName, $DomainName, $IPAddress, $DCHostName)
 
+Write-Host "Creating SPN for Windows Admin Center DNS name"
+
+$SpnAccountName = "$DomainNetbiosName\$VMName"
+
+Invoke-Command -ScriptBlock { Param($WacFQDN, $SpnAccountName)
+    & "setspn" "-A" "HTTP/$WacFQDN" $SpnAccountName
+} -Session $VMSession -ArgumentList @($WacFQDN, $SpnAccountName)
+
 Write-Host "Requesting certificate for Windows Admin Center"
 
 Request-DLabCertificate $VMName -VMSession $VMSession `

@@ -91,6 +91,15 @@ if (-Not (Test-RDMGroup $HVGroupName)) {
     Set-RDMSession -Session $HVFolder -Refresh:$Refresh
 }
 
+# WAC Folder
+$WACFolderName = "Windows Admin Center"
+$WACGroupName = "$LabFolderName\$WACFolderName"
+if (-Not (Test-RDMGroup $WACGroupName)) {
+    $WACFolder = New-RDMSession -Type "Group" -Name $WACFolderName
+    $WACFolder.Group = $WACGroupName
+    Set-RDMSession -Session $WACFolder -Refresh:$Refresh
+}
+
 # Domain Administrator
 
 $DomainAdminUPN = "Administrator@$DomainDnsName"
@@ -133,6 +142,25 @@ $Session.RDP.GatewayUsageMethod = "ModeDirect"
 Set-RDMSession -Session $Session -Refresh:$Refresh
 
 $RDGatewayEntry = Get-RDMSession -GroupName $RDGGroupName -Name $RDGatewayFQDN | Select-Object -First 1
+
+# Windows Admin Center
+
+$WacFQDN = "wac.$DnsZoneName"
+$WacURL = "https://$WacFQDN`:6516"
+
+$Params = @{
+    Name = $WacFQDN
+    Host = $WacURL
+    Type = "WebBrowser";
+}
+
+$Session = New-RDMSession @Params
+$Session.Group = $WACGroupName
+$Session.WebBrowserURL = $WacURL
+$Session.OpenEmbedded = $false
+$Session.Web.AutoFillLogin = $false
+$Session.Web.AutoSubmit = $false
+Set-RDMSession -Session $Session -Refresh:$Refresh
 
 # RDP (Regular)
 
