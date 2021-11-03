@@ -6,7 +6,8 @@ $SwitchName = "NAT Switch"
 $UserName = "Administrator"
 $Password = "lab123!"
 
-$InstallWindowUpdates = $true
+$InstallWindowsUpdates = $true
+$InstallChocolateyPackages = $true
 
 Write-Host "Creating golden image"
 
@@ -101,24 +102,27 @@ Invoke-Command -ScriptBlock {
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 } -Session $VMSession
 
-Write-Host "Installing useful chocolatey packages"
+if ($InstallChocolateyPackages) {
+    Write-Host "Installing useful chocolatey packages"
 
-Invoke-Command -ScriptBlock {
-    choco install -y git
-    choco install -y vlc
-    choco install -y 7zip
-    choco install -y gsudo
-    choco install -y firefox
-    choco install -y vscode
-    choco install -y openssl
-    choco install -y kdiff3
-    choco install -y filezilla
-    choco install -y winpcap
-    choco install -y wireshark
-    choco install -y sysinternals
-    choco install -y sublimetext3
-    choco install -y notepadplusplus
-} -Session $VMSession
+    Invoke-Command -ScriptBlock {
+        choco install -y git
+        choco install -y vlc
+        choco install -y 7zip
+        choco install -y gsudo
+        choco install -y firefox
+        choco install -y microsoft-edge
+        choco install -y vscode
+        choco install -y openssl
+        choco install -y kdiff3
+        choco install -y filezilla
+        choco install -y winpcap
+        choco install -y wireshark
+        choco install -y sysinternals
+        choco install -y sublimetext3
+        choco install -y notepadplusplus
+    } -Session $VMSession
+}
 
 Write-Host "Configuring Firefox to trust system root CAs"
 
@@ -200,7 +204,7 @@ Invoke-Command -ScriptBlock {
     Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 } -Session $VMSession
 
-if ($InstallWindowUpdates) {
+if ($InstallWindowsUpdates) {
     Write-Host "Installing Windows updates until VM is fully up-to-date"
 
     do {
