@@ -2,10 +2,10 @@
   "variables": {
     "client_id": "{{env `AZURE_CLIENT_ID`}}",
     "client_secret": "{{env `AZURE_CLIENT_SECRET`}}",
-    "lab_sources": "C:\\labSources",
     "tenant_id": "{{env `AZURE_TENANT_ID`}}",
     "subscription_id": "{{env `AZURE_SUBSCRIPTION_ID`}}",
-    "windows_iso_url": "{{ env `WINDOWS_ISO_URL`}}"
+    "windows_iso_url": "{{ env `WINDOWS_ISO_URL`}}",
+    "lab_git_ref": "master"
   },
   "builders": [
     {
@@ -29,7 +29,7 @@
       "winrm_use_ssl": true,
       "winrm_insecure": true,
       "winrm_timeout": "60m",
-      "winrm_username": "packer",
+      "winrm_username": "devolutions",
 
       "azure_tags": {
         "deployment-type": "packer",
@@ -46,13 +46,13 @@
   "provisioners": [
     {
       "type": "powershell",
-      "elevated_user": "packer",
+      "elevated_user": "devolutions",
       "elevated_password": "{{.WinRMPassword}}",
       "inline": [
         "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))",
         "choco install --no-progress --yes git",
         "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart",
-        "Add-WindowsFeature rsat-Hyper-V-tools",
+        "Add-WindowsFeature RSAT-Hyper-V-tools",
         "Install-PackageProvider Nuget -Force",
         "Install-Module -Name PowerShellGet -Force",
         "winrm set winrm/config '@{MaxTimeoutms=\"1800000\"}'",
@@ -65,12 +65,13 @@
     },
     {
       "type": "powershell",
-      "elevated_user": "packer",
+      "elevated_user": "devolutions",
       "elevated_password": "{{.WinRMPassword}}",
       "inline": [
-        "git clone https://@github.com/Devolutions/devolutions-labs.git {{user `lab_sources`}}; cd {{user `lab_sources`}}; git checkout packer2",
-        "Remove-Item {{user `lab_sources`}}\\.git -Recurse -Force",
-        "{{user `lab_sources`}}\\powershell\\host_init.ps1 -IncludeOptional",
+        "cd ~/Documents",
+        "git clone https://github.com/Devolutions/devolutions-labs.git -b '{{user `lab_git_ref`}}'",
+        "cd ~/Documents/devolutions-labs/powershell",
+        "./host_init.ps1 -IncludeOptional",
         "curl.exe -sqL '{{user `windows_iso_url`}}' -o C:\\Hyper-V\\ISOs\\windows_server_2019.iso"
       ]
     },
@@ -81,13 +82,14 @@
     },
     {
       "type": "powershell",
-      "elevated_user": "packer",
+      "elevated_user": "devolutions",
       "elevated_password": "{{.WinRMPassword}}",
       "timeout": "180m",
       "debug_mode": true,
       "inline": [
-        "Add-LocalGroupMember -Group \"Hyper-V Administrators\" -Member \"packer\"",
-        "cd {{user `lab_sources`}}\\powershell\\; .\\golden.ps1"
+        "Add-LocalGroupMember -Group \"Hyper-V Administrators\" -Member \"devolutions\"",
+        "cd ~/Documents/devolutions-labs/powershell",
+        "pwsh.exe ./golden.ps1"
       ]
     },
     {
@@ -97,7 +99,7 @@
     },
     {
       "type": "powershell",
-      "elevated_user": "packer",
+      "elevated_user": "devolutions",
       "elevated_password": "{{.WinRMPassword}}",
       "inline": [  
         "& $env:SystemRoot\\System32\\Sysprep\\Sysprep.exe /oobe /generalize /quiet /quit /mode:vm",

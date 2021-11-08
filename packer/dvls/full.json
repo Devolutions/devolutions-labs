@@ -2,9 +2,9 @@
   "variables": {
     "client_id": "{{env `AZURE_CLIENT_ID`}}",
     "client_secret": "{{env `AZURE_CLIENT_SECRET`}}",
-    "lab_sources": "C:\\labSources",
     "tenant_id": "{{env `AZURE_TENANT_ID`}}",
-    "subscription_id": "{{env `AZURE_SUBSCRIPTION_ID`}}"
+    "subscription_id": "{{env `AZURE_SUBSCRIPTION_ID`}}",
+    "lab_git_ref": "master"
   },
   "builders": [
     {
@@ -27,7 +27,7 @@
       "winrm_use_ssl": true,
       "winrm_insecure": true,
       "winrm_timeout": "60m",
-      "winrm_username": "packer",
+      "winrm_username": "devolutions",
 
       "azure_tags": {
         "deployment-type": "packer",
@@ -44,14 +44,24 @@
   "provisioners": [
     {
       "type": "powershell",
-      "elevated_user": "packer",
+      "elevated_user": "devolutions",
+      "elevated_password": "{{.WinRMPassword}}",
+      "inline": [
+        "cd ~/Documents",
+        "Remove-Item -Path ./devolutions-labs -Recurse -Force",
+        "git clone https://github.com/Devolutions/devolutions-labs.git -b '{{user `lab_git_ref`}}'"
+      ]
+    },
+    {
+      "type": "powershell",
+      "elevated_user": "devolutions",
       "elevated_password": "{{.WinRMPassword}}",
       "timeout": "180m",
       "debug_mode": true,
       "inline": [
-        "Add-LocalGroupMember -Group \"Hyper-V Administrators\" -Member \"packer\"",
-        "Write-Host 'Building Hyper-V lab'",
-        "cd {{user `lab_sources`}}\\powershell\\; pwsh.exe .\\build.ps1"
+        "Add-LocalGroupMember -Group \"Hyper-V Administrators\" -Member \"devolutions\"",
+        "cd ~/Documents/devolutions-labs/powershell",
+        "pwsh.exe ./build.ps1"
       ]
     },
     {
