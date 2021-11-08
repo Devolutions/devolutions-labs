@@ -101,10 +101,10 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $SessionHost, $WebAccessS
         WebAccessServer = $WebAccessServer;
     }
     New-RDSessionDeployment @Params
- 
+
     Add-RDServer -Server $ConnectionBroker -Role RDS-Licensing `
         -ConnectionBroker $ConnectionBroker
-    
+
     Add-RDServer -Server $WebAccessServer -Role RDS-Gateway `
         -ConnectionBroker $ConnectionBroker -GatewayExternalFqdn $GatewayExternalFQDN
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $SessionHost, $WebAccessServer, $GatewayExternalFQDN)
@@ -243,7 +243,7 @@ Invoke-Command -ScriptBlock { Param($DGatewayFQDN, $CertificateFile, $Certificat
     Set-DGatewayListeners @(
         $(New-DGatewayListener 'https://*:7171' 'https://*:7171'),
         $(New-DGatewayListener 'tcp://*:8181' 'tcp://*:8181'))
-    
+
     Set-Service 'DevolutionsGateway' -StartupType 'Automatic'
     Start-Service 'DevolutionsGateway'
 } -Session $VMSession -ArgumentList @($DGatewayFQDN, $CertificateFile, $CertificatePassword)

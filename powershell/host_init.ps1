@@ -16,10 +16,13 @@ function Invoke-HostInit {
     }
 
     if ($IncludeOptional) {
-        choco install -y --no-progress git
+        if (-Not (Get-Command -Name git -CommandType Application -ErrorAction SilentlyContinue)) {
+            choco install -y --no-progress git
+        }
         choco install -y --no-progress vlc
         choco install -y --no-progress gsudo
         choco install -y --no-progress firefox
+        choco install -y --no-progress microsoft-edge
         choco install -y --no-progress vscode
         choco install -y --no-progress openssl
         choco install -y --no-progress kdiff3
