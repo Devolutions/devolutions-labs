@@ -1,0 +1,82 @@
+{
+  "variables": {
+    "client_id": "{{env `AZURE_CLIENT_ID`}}",
+    "client_secret": "{{env `AZURE_CLIENT_SECRET`}}",
+    "tenant_id": "{{env `AZURE_TENANT_ID`}}",
+    "subscription_id": "{{env `AZURE_SUBSCRIPTION_ID`}}",
+    "lab_git_ref": "master"
+  },
+  "builders": [
+    {
+      "type": "azure-arm",
+
+      "client_id": "{{user `client_id`}}",
+      "client_secret": "{{user `client_secret`}}",
+      "tenant_id": "{{user `tenant_id`}}",
+      "subscription_id": "{{user `subscription_id`}}",
+
+      "managed_image_resource_group_name": "dvls-lab-services-test",
+      "managed_image_name": "dvls-lab-service-full",
+      "managed_image_storage_account_type": "Premium_LRS",
+
+      "os_type": "Windows",
+      "custom_managed_image_resource_group_name": "dvls-lab-services-test",
+      "custom_managed_image_name": "dvls-lab-service-base",
+
+      "communicator": "winrm",
+      "winrm_use_ssl": true,
+      "winrm_insecure": true,
+      "winrm_timeout": "60m",
+      "winrm_username": "devolutions",
+
+      "azure_tags": {
+        "deployment-type": "packer",
+        "project": "dvls",
+        "os_type": "windows"
+      },
+
+      "location": "canadaeast",
+      "vm_size": "Standard_D8s_v3",
+
+      "allowed_inbound_ip_addresses": "64.119.219.186/32,206.47.209.34/32"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "powershell",
+      "elevated_user": "devolutions",
+      "elevated_password": "{{.WinRMPassword}}",
+      "inline": [
+        "cd ~/Documents",
+        "Remove-Item -Path ./devolutions-labs -Recurse -Force",
+        "git clone https://github.com/Devolutions/devolutions-labs.git -b '{{user `lab_git_ref`}}'"
+      ]
+    },
+    {
+      "type": "powershell",
+      "elevated_user": "devolutions",
+      "elevated_password": "{{.WinRMPassword}}",
+      "timeout": "180m",
+      "debug_mode": true,
+      "inline": [
+        "Add-LocalGroupMember -Group \"Hyper-V Administrators\" -Member \"devolutions\"",
+        "cd ~/Documents/devolutions-labs/powershell",
+        "pwsh.exe ./build.ps1"
+      ]
+    },
+    {
+      "type": "windows-restart",
+      "restart_timeout": "30m",
+      "timeout": "60m"
+    },
+    {
+        "type": "powershell",
+        "elevated_user": "packer",
+        "elevated_password": "{{.WinRMPassword}}",
+        "inline": [  
+          "& $env:SystemRoot\\System32\\Sysprep\\Sysprep.exe /oobe /generalize /quiet /quit /mode:vm",
+          "while($true) { $imageState = Get-ItemProperty HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Setup\\State | Select ImageState; if($imageState.ImageState -ne 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE') { Write-Output $imageState.ImageState; Start-Sleep -s 10  } else { break } }"
+        ]
+    }
+  ]
+}
