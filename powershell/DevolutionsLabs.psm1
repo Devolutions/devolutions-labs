@@ -286,7 +286,8 @@ function Expand-AlpineOverlay
         Push-Location
         Set-Location $_.Directory
         Remove-Item $Source | Out-Null
-        New-Item -ItemType SymbolicLink -Path $Source -Target $Target | Out-Null
+        & "cmd.exe" "/c" "mklink `"$Source`" `"$Target`""
+        #New-Item -ItemType SymbolicLink -Path $Source -Target $Target | Out-Null
         Pop-Location
     }
     Pop-Location
