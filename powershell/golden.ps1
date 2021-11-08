@@ -1,6 +1,8 @@
 
 Import-Module .\DevolutionsLabs.psm1 -Force
 
+$ErrorActionPreference = "Stop"
+
 $VMName = "IT-TEMPLATE"
 $SwitchName = "NAT Switch"
 $UserName = "Administrator"
@@ -102,25 +104,30 @@ Invoke-Command -ScriptBlock {
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
 } -Session $VMSession
 
-if ($InstallChocolateyPackages) {
-    Write-Host "Installing useful chocolatey packages"
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
+if ($InstallChocolateyPackages) {
     Invoke-Command -ScriptBlock {
-        choco install -y git
-        choco install -y vlc
-        choco install -y 7zip
-        choco install -y gsudo
-        choco install -y firefox
-        choco install -y microsoft-edge
-        choco install -y vscode
-        choco install -y openssl
-        choco install -y kdiff3
-        choco install -y filezilla
-        choco install -y winpcap
-        choco install -y wireshark
-        choco install -y sysinternals
-        choco install -y sublimetext3
-        choco install -y notepadplusplus
+        $Packages = @(
+            'git',
+            'vlc',
+            '7zip',
+            'gsudo',
+            'firefox',
+            'microsoft-edge',
+            'vscode',
+            'openssl',
+            'kdiff3',
+            'filezilla',
+            'wireshark',
+            'sysinternals',
+            'sublimetext3',
+            'notepadplusplus')
+
+        foreach ($Package in $Packages) {
+            Write-Host "Installing $Package"
+            choco install -y --no-progress $Package
+        }
     } -Session $VMSession
 }
 
@@ -218,7 +225,7 @@ if ($InstallWindowsUpdates) {
                 PendingReboot = Get-WUIsPendingReboot
             }
         } -Session $VMSession
-        
+
         if ($WUStatus.PendingReboot) {
             Restart-VM $VMName -Force
             Wait-VM $VMName -For IPAddress -Timeout 360
