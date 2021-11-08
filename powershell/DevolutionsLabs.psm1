@@ -659,16 +659,16 @@ function Wait-DLabVM
     if ($Condition -eq 'PSDirect') {
         $Credential = Get-DLabCredential -UserName $UserName -Password $Password
         while ((Invoke-Command -VMName $VMName -Credential $Credential `
-            { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 1 }
+            { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 5 }
     } elseif ($Condition -eq 'Shutdown') {
-        while ($(Get-VM $VMName).State -ne "Off") { Start-Sleep 1 }
+        while ($(Get-VM $VMName).State -ne "Off") { Start-Sleep 5 }
     } elseif ($Condition -eq 'Reboot') {
         if (-Not $PSBoundParameters.ContainsKey('OldUptime')) {
             $OldUptime = $(Get-VM $VMName).Uptime
         }
         do {
             $NewUptime = $(Get-VM $VMName).Uptime
-            Start-Sleep 1
+            Start-Sleep 5
         }
         while ($NewUptime -ge $OldUptime)
     } else {
@@ -784,7 +784,7 @@ function Add-DLabVMToDomain
         $Credential = New-Object System.Management.Automation.PSCredential @($UserName, $SecurePassword)
         while (-Not [bool](Resolve-DnsName -Name $DomainController -ErrorAction SilentlyContinue)) {
             Write-Host "Waiting for $DomainController..."
-            Start-Sleep 1
+            Start-Sleep 5
         }
         Add-Computer -DomainName $DomainName -Credential $Credential -Restart
     } -Session $VMSession -ArgumentList @($DomainName, $DomainController, $UserName, $Password)

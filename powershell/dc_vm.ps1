@@ -36,7 +36,7 @@ Invoke-Command -ScriptBlock { Param($BootTime)
     while (-Not [bool]$(Get-EventLog -LogName "System" `
         -Source "Microsoft-Windows-GroupPolicy" -InstanceId 1502 `
         -After $BootTime -ErrorAction SilentlyContinue)) {
-            Start-Sleep 1
+            Start-Sleep 10
     }
 } -Session $VMSession -ArgumentList @($BootTime)
 
