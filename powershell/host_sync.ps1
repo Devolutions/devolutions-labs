@@ -22,16 +22,41 @@ $HostEntries = Invoke-Command -ScriptBlock { Param($DnsZoneName, $IpFilter)
     }
 } -Session $VMSession -ArgumentList @($DnsZoneName, $IpFilter)
 
+function Set-HostEntrySafe
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $Name,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $Address,
+        [switch] $Force
+    )
+
+    $success = $false
+    while (-Not $success) {
+        try {
+            Set-HostEntry -Name $Name -Address $Address -Force:$Force
+            $success = $true
+        } catch [System.IO.IOException] {
+            # The process cannot access the file because it is being used by another process.
+            Start-Sleep 1
+        } catch {
+            throw $_.Exception
+        }
+    }
+}
+
 $HostEntries | Where-Object { $_.HostName -Like "$LabPrefix-*" } | ForEach-Object {
     $MachineName = $_.HostName.ToUpper()
     $MachineFQDN = "$MachineName.$DnsZoneName"
-    Set-HostEntry -Name $MachineName -Address $_.Address -Force
-    Set-HostEntry -Name $MachineFQDN -Address $_.Address -Force
+    Set-HostEntrySafe -Name $MachineName -Address $_.Address -Force
+    Set-HostEntrySafe -Name $MachineFQDN -Address $_.Address -Force
 }
 
 $HostEntries | Where-Object { $_.HostName -NotLike "$LabPrefix-*" } | ForEach-Object {
     $HostFQDN = "$($_.HostName).$DnsZoneName"
-    Set-HostEntry -Name $HostFQDN -Address $_.Address -Force
+    Set-HostEntrySafe -Name $HostFQDN -Address $_.Address -Force
 }
 
 # Synchronize trusted root CAs
