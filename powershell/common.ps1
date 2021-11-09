@@ -1,4 +1,3 @@
-
 # common variable definitions
 
 Import-Module .\DevolutionsLabs.psm1 -Force

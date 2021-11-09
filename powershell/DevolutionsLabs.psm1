@@ -1,4 +1,3 @@
-
 if (-Not (Test-Path 'variable:global:IsWindows')) {
     $script:IsWindows = $true; # Windows PowerShell 5.1 or earlier
 }

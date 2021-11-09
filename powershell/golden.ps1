@@ -1,4 +1,3 @@
-
 Import-Module .\DevolutionsLabs.psm1 -Force
 
 $ErrorActionPreference = "Stop"
@@ -8,7 +7,7 @@ $SwitchName = "NAT Switch"
 $UserName = "Administrator"
 $Password = "lab123!"
 
-$InstallWindowsUpdates = $true
+$InstallWindowsUpdates = $false
 $InstallChocolateyPackages = $true
 
 Write-Host "Creating golden image"
@@ -211,28 +210,28 @@ Invoke-Command -ScriptBlock {
     Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 } -Session $VMSession
 
-if ($InstallWindowsUpdates) {
-    Write-Host "Installing Windows updates until VM is fully up-to-date"
+# if ($InstallWindowsUpdates) {
+#     Write-Host "Installing Windows updates until VM is fully up-to-date"
 
-    do {
-        $WUStatus = Invoke-Command -ScriptBlock {
-            $Updates = Start-WUScan
-            if ($Updates.Count -gt 0) {
-                Install-WUUpdates -Updates $Updates
-            }
-            [PSCustomObject]@{
-                UpdateCount = $(Start-WUScan).Count
-                PendingReboot = Get-WUIsPendingReboot
-            }
-        } -Session $VMSession
+#     do {
+#         $WUStatus = Invoke-Command -ScriptBlock {
+#             $Updates = Start-WUScan
+#             if ($Updates.Count -gt 0) {
+#                 Install-WUUpdates -Updates $Updates
+#             }
+#             [PSCustomObject]@{
+#                 UpdateCount = $(Start-WUScan).Count
+#                 PendingReboot = Get-WUIsPendingReboot
+#             }
+#         } -Session $VMSession
 
-        if ($WUStatus.PendingReboot) {
-            Restart-VM $VMName -Force
-            Wait-VM $VMName -For IPAddress -Timeout 360
-            $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
-        }
-    } until (($WUStatus.PendingReboot -eq $false) -and ($WUStatus.UpdateCount -eq 0))
-}
+#         if ($WUStatus.PendingReboot) {
+#             Restart-VM $VMName -Force
+#             Wait-VM $VMName -For IPAddress -Timeout 360
+#             $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+#         }
+#     } until (($WUStatus.PendingReboot -eq $false) -and ($WUStatus.UpdateCount -eq 0))
+# }
 
 Write-Host "Cleaning up Windows base image (WinSxS folder)"
 

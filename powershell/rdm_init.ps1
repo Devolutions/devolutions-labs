@@ -1,4 +1,3 @@
-
 . .\common.ps1
 
 Import-Module RemoteDesktopManager -Force
