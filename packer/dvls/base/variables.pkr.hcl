@@ -49,6 +49,6 @@ variable "windows_iso_url" {
 }
 
 variable "golden_7z_url" {
-  default = env("GOLDEN_7Z_URL")
+  default = env("VHDX_WRITE_SAS_TOKEN")
   type    = string
 }
