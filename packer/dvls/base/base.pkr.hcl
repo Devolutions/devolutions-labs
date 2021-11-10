@@ -72,6 +72,18 @@ build {
     timeout = "3h0m0s"
   }
 
+  provisioner "powershell" {
+    elevated_password = build.Password
+    elevated_user     = var.username
+    inline = [
+      "cd C:\\Hyper-V\\IMGs",
+      "7z a -t7z golden.7z *.vhdx",
+      "choco install --no-progress --yes azcopy10",
+      "azcopy cp .\\golden.7z \"${var.golden_7z_url}\""
+    ]
+    timeout = "1h30m0s"
+  }
+
   provisioner "windows-restart" {
     restart_timeout = "30m"
     timeout         = "1h0m0s"
