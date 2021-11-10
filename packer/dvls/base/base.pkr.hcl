@@ -79,7 +79,8 @@ build {
       "cd C:\\Hyper-V\\IMGs",
       "7z a -t7z golden.7z *.vhdx",
       "choco install --no-progress --yes azcopy10",
-      "azcopy cp .\\golden.7z \"${var.golden_7z_url}\""
+      "$Env:AZCOPY_CRED_TYPE = "Anonymous",
+      "azcopy copy .\\golden.7z \"${var.golden_7z_url}\" --overwrite=true --from-to=LocalBlob --blob-type Detect --follow-symlinks --put-md5 --recursive --log-level=INFO"
     ]
     timeout = "1h30m0s"
   }
