@@ -1,4 +1,3 @@
-
 function Invoke-HostInit {
     param(
         [switch] $Bootstrap,
