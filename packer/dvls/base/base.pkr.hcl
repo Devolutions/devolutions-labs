@@ -72,6 +72,19 @@ build {
     timeout = "3h0m0s"
   }
 
+  provisioner "powershell" {
+    elevated_password = build.Password
+    elevated_user     = var.username
+    inline = [
+      "cd C:\\Hyper-V\\IMGs",
+      "7z a -t7z golden.7z *.vhdx",
+      "choco install --no-progress --yes azcopy10",
+      "$Env:AZCOPY_CRED_TYPE='Anonymous'",
+      "azcopy copy .\\golden.7z \"${var.golden_7z_url}\" --overwrite=true --from-to=LocalBlob --blob-type Detect --follow-symlinks --put-md5 --recursive --log-level=INFO"
+    ]
+    timeout = "1h30m0s"
+  }
+
   provisioner "windows-restart" {
     restart_timeout = "30m"
     timeout         = "1h0m0s"
