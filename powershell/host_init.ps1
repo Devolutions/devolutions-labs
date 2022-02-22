@@ -84,7 +84,7 @@ function Invoke-HostInit {
 
     # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 
-    $AlpineVersion = "3.13.5"
+    $AlpineVersion = "3.15.0"
     $AlpineRelease = $AlpineVersion -Replace "^(\d+)\.(\d+)\.(\d+)$", "v`$1.`$2"
     $AlpineIsoFileName = "alpine-virt-${AlpineVersion}-x86_64.iso"
     $AlpineIsoDownloadUrl = "https://dl-cdn.alpinelinux.org/alpine/${AlpineRelease}/releases/x86_64/$AlpineIsoFileName"
