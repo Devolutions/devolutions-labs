@@ -122,7 +122,7 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2021.2.10.0"
+$DvlsVersion = "2022.1.9.0"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
 $DvlsAdminPassword = "dvls-admin123!"

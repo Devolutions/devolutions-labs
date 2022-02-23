@@ -7,7 +7,7 @@ $SwitchName = "NAT Switch"
 $UserName = "Administrator"
 $Password = "lab123!"
 
-$InstallWindowsUpdates = $false
+$InstallWindowsUpdates = $true
 $InstallChocolateyPackages = $true
 
 Write-Host "Creating golden image"
@@ -63,6 +63,13 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -SwitchName $SwitchName -NetAdapterName "vEthernet (LAN)" `
     -IPAddress "10.9.0.249" -DefaultGateway "10.9.0.1" `
     -DnsServerAddress "1.1.1.1"
+
+Write-Host "Increase WinRM default configuration values"
+
+Invoke-Command -ScriptBlock {
+    & 'winrm' 'set' 'winrm/config' '@{MaxTimeoutms=\"1800000\"}'
+    & 'winrm' 'set' 'winrm/config/winrs' '@{MaxMemoryPerShellMB=\"800\"}'
+} -Session $VMSession
 
 Write-Host "Enabling TLS 1.2 for .NET Framework applications"
 
@@ -210,28 +217,46 @@ Invoke-Command -ScriptBlock {
     Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 } -Session $VMSession
 
-# if ($InstallWindowsUpdates) {
-#     Write-Host "Installing Windows updates until VM is fully up-to-date"
+Write-Host "Rebooting VM"
 
-#     do {
-#         $WUStatus = Invoke-Command -ScriptBlock {
-#             $Updates = Start-WUScan
-#             if ($Updates.Count -gt 0) {
-#                 Install-WUUpdates -Updates $Updates
-#             }
-#             [PSCustomObject]@{
-#                 UpdateCount = $(Start-WUScan).Count
-#                 PendingReboot = Get-WUIsPendingReboot
-#             }
-#         } -Session $VMSession
+Invoke-Command -ScriptBlock {
+    Restart-Computer -Force
+} -Session $VMSession
 
-#         if ($WUStatus.PendingReboot) {
-#             Restart-VM $VMName -Force
-#             Wait-VM $VMName -For IPAddress -Timeout 360
-#             $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
-#         }
-#     } until (($WUStatus.PendingReboot -eq $false) -and ($WUStatus.UpdateCount -eq 0))
-# }
+Wait-DLabVM $VMName 'Reboot' -Timeout 120
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $UserName -Password $Password
+
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+
+if ($InstallWindowsUpdates) {
+    Write-Host "Installing Windows updates until VM is fully up-to-date"
+
+    do {
+        $WUStatus = Invoke-Command -ScriptBlock {
+            Write-Host "Start-WUScan: $(Get-Date)"
+            $Updates = Start-WUScan
+            if ($Updates.Count -gt 0) {
+                Write-Host "Install-WUUpdates ($($Updates.Count)): $(Get-Date)"
+                Install-WUUpdates -Updates $Updates
+            }
+            [PSCustomObject]@{
+                UpdateCount = $(Start-WUScan).Count
+                PendingReboot = Get-WUIsPendingReboot
+            }
+        } -Session $VMSession
+
+        Write-Host "WUStatus: ($($WUStatus.Count)), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
+
+        if ($WUStatus.PendingReboot) {
+            Write-Host "Rebooting VM: $(Get-Date)"
+
+            Restart-VM $VMName -Force
+            Wait-VM $VMName -For IPAddress -Timeout 360
+            Start-Sleep -Seconds 60
+            $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+        }
+    } until (($WUStatus.PendingReboot -eq $false) -and ($WUStatus.UpdateCount -eq 0))
+}
 
 Write-Host "Cleaning up Windows base image (WinSxS folder)"
 
