@@ -184,10 +184,21 @@ Invoke-Command -ScriptBlock {
     iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
 } -Session $VMSession
 
+Write-Host "Rebooting VM"
+
+Invoke-Command -ScriptBlock {
+    Restart-Computer -Force
+} -Session $VMSession
+
+Wait-DLabVM $VMName 'Reboot' -Timeout 120
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $UserName -Password $Password
+
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+
 Write-Host "Enabling and starting sshd service"
 
 Invoke-Command -ScriptBlock {
-    Install-Module -Name Microsoft.PowerShell.RemotingTools -Scope AllUsers
+    Install-Module -Name Microsoft.PowerShell.RemotingTools -Scope AllUsers -Force
     Set-Service -Name sshd -StartupType 'Automatic'
     Start-Service sshd
 } -Session $VMSession
