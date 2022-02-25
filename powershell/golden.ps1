@@ -112,6 +112,12 @@ Invoke-Command -ScriptBlock {
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
+Write-Host "Installing .NET Framework 4.8"
+
+Invoke-Command -ScriptBlock {
+    choco install -y --no-progress netfx-4.8
+} -Session $VMSession
+
 if ($InstallChocolateyPackages) {
     Invoke-Command -ScriptBlock {
         $Packages = @(
