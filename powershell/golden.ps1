@@ -262,7 +262,7 @@ if ($InstallWindowsUpdates) {
             }
         } -Session $VMSession
 
-        Write-Host "WUStatus: ($($WUStatus.Count)), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
+        Write-Host "WUStatus: ($($WUStatus.UpdateCount)), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
 
         if ($WUStatus.PendingReboot) {
             Write-Host "Rebooting VM: $(Get-Date)"
