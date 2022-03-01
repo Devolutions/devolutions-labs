@@ -251,11 +251,10 @@ if ($InstallWindowsUpdates) {
 
     do {
         $WUStatus = Invoke-Command -ScriptBlock {
-            Write-Host "Install-WindowsUpdate: $(Get-Date)"
             $Updates = Get-WUList
             if ($Updates.Count -gt 0) {
-                Write-Host "Install-WindowsUpdate ($($Updates.Count)): $(Get-Date)"
-                Install-WindowsUpdate -AcceptAll -AutoReboot
+                Write-Host "Install-WindowsUpdate $($Updates.Count): $(Get-Date)"
+                Install-WindowsUpdate -AcceptAll -AutoReboot | Out-Null
             }
             [PSCustomObject]@{
                 UpdateCount = $Updates.Count
@@ -263,7 +262,7 @@ if ($InstallWindowsUpdates) {
             }
         } -Session $VMSession
 
-        Write-Host "WUStatus: ($($WUStatus.UpdateCount)), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
+        Write-Host "WUStatus: $($WUStatus.UpdateCount), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
 
         if ($WUStatus.PendingReboot) {
             Write-Host "Waiting for VM reboot: $(Get-Date)"
