@@ -129,6 +129,7 @@ $DvlsAdminPassword = "dvls-admin123!"
 $DvlsAdminEmail = "admin@ad.it-help.ninja"
 
 $DvlsHostName = "dvls.$DomainName"
+$DvlsAccessUri = "https://$DvlsHostName"
 $CertificateFile = "~\Documents\cert.pfx"
 $CertificatePassword = "cert123!"
 
@@ -179,13 +180,13 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion)
     $ProgressPreference = 'SilentlyContinue'
     $DownloadBaseUrl = "https://cdn.devolutions.net/download"
     $DvlsConsoleExe = "$(Resolve-Path ~)\Documents\Setup.DVLS.Console.exe"
-    Invoke-WebRequest "$DownloadBaseUrl/Setup.DPS.Console.${DvlsVersion}.exe" -OutFile $DvlsConsoleExe
+    Invoke-WebRequest "$DownloadBaseUrl/Setup.DVLS.Console.${DvlsVersion}.exe" -OutFile $DvlsConsoleExe
     Start-Process -FilePath $DvlsConsoleExe -ArgumentList @('/qn') -Wait
 } -Session $VMSession -ArgumentList @($DvlsVersion)
 
 Write-Host "Install Devolutions Server"
 
-Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath,
+Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath, $DvlsAccessUri,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword, $DvlsAdminEmail)
 
@@ -210,6 +211,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath,
         "--installZip=`"$DvlsWebAppZip`"",
         "--dps-path=`"$DvlsPath`""
         "--website=`"DVLS`"",
+        "--access-uri=`"$DvlsAccessUri`"",
         "--serverName=`"Devolutions Server`"",
         "--backupKeysPath=`"$BackupKeysPath`"",
         "--backupKeysPassword=$BackupKeysPassword",
@@ -224,6 +226,6 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath,
 
     & $DvlsConsoleCli @DvlsConsoleArgs
 
-} -Session $VMSession -ArgumentList @($DvlsVersion, $DvlsPath,
+} -Session $VMSession -ArgumentList @($DvlsVersion, $DvlsPath, $DvlsAccessUri,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword, $DvlsAdminEmail)
