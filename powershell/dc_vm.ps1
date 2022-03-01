@@ -45,3 +45,9 @@ Invoke-Command -ScriptBlock {
     New-Item "C:\Shared" -ItemType "Directory" | Out-Null
     New-SmbShare -Name "Shared" -Path "C:\Shared" -FullAccess 'ANONYMOUS LOGON','Everyone'
 } -Session $VMSession
+
+Write-Host "Disable Active Directory default password expiration policy"
+
+Invoke-Command -ScriptBlock {
+    Get-ADDefaultDomainPasswordPolicy -Current LoggedOnUser | Set-ADDefaultDomainPasswordPolicy -MaxPasswordAge 00.00:00:00
+} -Session $VMSession
