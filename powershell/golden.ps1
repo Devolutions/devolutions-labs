@@ -161,8 +161,9 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing useful PowerShell modules"
 
 Invoke-Command -ScriptBlock {
-    Install-Module Posh-ACME -Scope AllUsers
-    Install-Module PsHosts -Scope AllUsers
+    Install-Module -Name PsHosts -Scope AllUsers
+    Install-Module -Name Posh-ACME -Scope AllUsers
+    Install-Module -Name PSWindowsUpdate -Scope AllUsers
 } -Session $VMSession
 
 Write-Host "Installing Remote Server Administration DNS tools"
@@ -250,24 +251,23 @@ if ($InstallWindowsUpdates) {
 
     do {
         $WUStatus = Invoke-Command -ScriptBlock {
-            Write-Host "Start-WUScan: $(Get-Date)"
-            $Updates = Start-WUScan
+            Write-Host "Install-WindowsUpdate: $(Get-Date)"
+            $Updates = Get-WUList
             if ($Updates.Count -gt 0) {
-                Write-Host "Install-WUUpdates ($($Updates.Count)): $(Get-Date)"
-                Install-WUUpdates -Updates $Updates
+                Write-Host "Install-WindowsUpdate ($($Updates.Count)): $(Get-Date)"
+                Install-WindowsUpdate -AcceptAll -AutoReboot
             }
             [PSCustomObject]@{
-                UpdateCount = $(Start-WUScan).Count
-                PendingReboot = Get-WUIsPendingReboot
+                UpdateCount = $Updates.Count
+                PendingReboot = Get-WURebootStatus -Silent
             }
         } -Session $VMSession
 
         Write-Host "WUStatus: ($($WUStatus.UpdateCount)), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
 
         if ($WUStatus.PendingReboot) {
-            Write-Host "Rebooting VM: $(Get-Date)"
-
-            Restart-VM $VMName -Force
+            Write-Host "Waiting for VM reboot: $(Get-Date)"
+            Wait-DLabVM $VMName 'Reboot' -Timeout 120
             Wait-VM $VMName -For IPAddress -Timeout 360
             Start-Sleep -Seconds 60
             $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
@@ -292,7 +292,7 @@ Invoke-Command -ScriptBlock {
 Write-Host "Running sysprep to generalize the image for OOBE experience and shut down VM"
 
 Invoke-Command -ScriptBlock {
-    & "$Env:WinDir\System32\Sysprep\sysprep.exe" /oobe /generalize /shutdown /mode:vm
+    & "$Env:WinDir\System32\Sysprep\sysprep.exe" '/oobe' '/generalize' '/shutdown' '/mode:vm'
 } -Session $VMSession
 
 Write-Host "Waiting for VM to shut down completely"
