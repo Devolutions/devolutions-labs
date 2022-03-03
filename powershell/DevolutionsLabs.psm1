@@ -801,6 +801,7 @@ function Request-DLabCertificate
         [Parameter(Mandatory=$true)]
         [string] $CommonName,
         [int] $KeyLength = 2048,
+        [string[]] $ExtendedKeyUsage = @('ServerAuthentication'),
         [Parameter(Mandatory=$true)]
         [string] $CACommonName,
         [Parameter(Mandatory=$true)]
@@ -811,8 +812,23 @@ function Request-DLabCertificate
         [string] $Password
     )
 
-    Invoke-Command -ScriptBlock { Param($CommonName, $KeyLength,
+    Invoke-Command -ScriptBlock { Param($CommonName, $KeyLength, $ExtendedKeyUsage,
         $CAHostName, $CACommonName, $CertificateFile, $Password)
+
+        $EkuNames = [ordered]@{
+            CodeSigning="1.3.6.1.5.5.7.3.3";
+            ServerAuthentication="1.3.6.1.5.5.7.3.1";
+            ClientAuthentication="1.3.6.1.5.5.7.3.2";
+            RemoteDesktopAuthentication="1.3.6.1.4.1.311.54.1.2";
+        }
+
+        $sb = [System.Text.StringBuilder]::new()
+        $ExtendedKeyUsage | ForEach-Object {
+            $EkuName = $_
+            $EkuOid = $EkuNames[$EkuName]
+            $sb.AppendLine("OID = $EkuOid ; $EkuName") | Out-Null
+        }
+        $EnhancedKeyUsageExtension = $sb.ToString()
     
         $CertInf = @"
 [NewRequest]
@@ -827,8 +843,7 @@ MachineKeySet = TRUE
 CertificateTemplate = "WebServer"
 
 [EnhancedKeyUsageExtension]
-OID = 1.3.6.1.5.5.7.3.1 ; Server Authentication
-OID = 1.3.6.1.5.5.7.3.2 ; Client Authentication
+$EnhancedKeyUsageExtension
 
 [Extensions]
 2.5.29.17 = "{text}"; Subject Alternative Names (SANs)
@@ -873,8 +888,53 @@ _continue_ = "dns=$CommonName&"
 
         Remove-Item $TempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
 
-    } -Session $VMSession -ArgumentList @($CommonName, $KeyLength,
+    } -Session $VMSession -ArgumentList @($CommonName, $KeyLength, $ExtendedKeyUsage,
         $CAHostName, $CACommonName, $CertificateFile, $Password)
+}
+
+function Request-DLabRdpCertificate
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession,
+        [Parameter(Mandatory=$true)]
+        [string] $CACommonName,
+        [Parameter(Mandatory=$true)]
+        [string] $CAHostName,
+        [string] $CertificateFile = "~\Documents\rdp.pfx",
+        [string] $Password = "rdp123!"
+    )
+
+    $RdpServerName = Invoke-Command -ScriptBlock {
+        "$($Env:ComputerName).$($Env:UserDnsDomain.ToLower())"
+    } -Session $VMSession
+
+    $RdpCertificateFile = $CertificateFile
+    $RdpCertificatePassword = $Password
+
+    Request-DLabCertificate $VMName -VMSession $VMSession `
+        -CommonName $RdpServerName `
+        -ExtendedKeyUsage @('RemoteDesktopAuthentication') `
+        -CAHostName $CAHostName -CACommonName $CACommonName `
+        -CertificateFile $RdpCertificateFile -Password $RdpCertificatePassword
+
+    Invoke-Command -ScriptBlock { Param($RdpServerName, $RdpCertificateFile, $RdpCertificatePassword)
+        $Params = @{
+            FilePath          = $RdpCertificateFile;
+            CertStoreLocation = "cert:\LocalMachine\My";
+            Password          = (ConvertTo-SecureString $RdpCertificatePassword -AsPlainText -Force);
+            Exportable        = $true;
+        }
+        $RdpCertificate = Import-PfxCertificate @Params
+        $RdpCertificateThumbprint = $RdpCertificate.Thumbprint
+        
+        Get-CimInstance -ClassName Win32_TSGeneralSetting -Namespace ROOT\CIMV2\TerminalServices |
+            Set-CimInstance -Property @{ SSLCertificateSHA1Hash = $RdpCertificateThumbprint }
+
+    } -Session $VMSession -ArgumentList @($RdpServerName, $RdpCertificateFile, $RdpCertificatePassword)
 }
 
 function Set-DLabVMAutologon

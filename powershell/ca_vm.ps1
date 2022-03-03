@@ -67,3 +67,8 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     $CertAdmin.PublishCRLs($CAConfigName, $([DateTime]::UtcNow), 17)
     Get-ChildItem "$CertSrvPath\CertEnroll\*.crl" | ForEach-Object { certutil.exe -f -dspublish $_.FullName }
 } -Session $VMSession -ArgumentList @($CAHostName, $CACommonName)
+
+Write-Host "Requesting RDP server certificate"
+
+Request-DLabRdpCertificate $VMName -VMSession $VMSession `
+    -CAHostName $CAHostName -CACommonName $CACommonName
