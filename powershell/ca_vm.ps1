@@ -54,6 +54,8 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
         -section:system.webServer/security/requestFiltering -allowDoubleEscaping:True /commit:apphost
     Start-IISSite -Name 'CertSrv'
+    $LdapCrlDP = Get-CACrlDistributionPoint | Where-Object { $_.Uri -Like "ldap://*" }
+    Remove-CACrlDistributionPoint -Uri $LdapCrlDP.Uri -Force
     $HttpCrlDP = Get-CACrlDistributionPoint | Where-Object { $_.Uri -Like "http://*/CertEnroll/*" }
     Remove-CACrlDistributionPoint -Uri $HttpCrlDP.Uri -Force
     Add-CACrlDistributionPoint -Uri $HttpCrlDP.URI -AddToCertificateCdp -AddToFreshestCrl -Force
