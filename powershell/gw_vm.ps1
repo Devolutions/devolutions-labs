@@ -29,6 +29,11 @@ Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $DomainUserName -Password
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
+Write-Host "Requesting RDP server certificate"
+
+Request-DLabRdpCertificate $VMName -VMSession $VMSession `
+    -CAHostName $CAHostName -CACommonName $CACommonName
+
 # Install Remote Desktop Gateway
 
 Write-Host "Installing RD Gateway, RD Web Access and RD Connection Broker"
