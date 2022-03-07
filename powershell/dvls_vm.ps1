@@ -67,10 +67,13 @@ Write-Host "Changing IIS default rules"
 
 Invoke-Command -ScriptBlock {
     & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
+        -section:system.webServer/proxy -enabled:true /commit:apphost
+
+    & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
         -section:system.webServer/proxy -preserveHostHeader:true /commit:apphost
 
     & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
-        -section:system.WebServer/rewrite/globalRules -useOriginalURLEncoding:false /commit:apphost
+        -section:system.webServer/rewrite/globalRules -useOriginalURLEncoding:false /commit:apphost
 } -Session $VMSession
 
 Write-Host "Installing SQL Server Express"
