@@ -250,6 +250,9 @@ $VMAliases | ForEach-Object {
     $Session = New-RDMSession @Params
     $Session.Group = $DGWGroupName
     $Session.CredentialConnectionID = $DomainAdminId
+    $Session.VPN.Application = "Inherited"
+    $Session.VPN.Enabled = $true
+    $Session.VPN.Mode = "AlwaysConnect"
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
@@ -295,6 +298,55 @@ $VMAliases | ForEach-Object {
     $Session.PowerShell.Host = $Params.Host
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
     $Session.PowerShell.Run64BitsMode = $true
+    Set-RDMSession -Session $Session -Refresh:$Refresh
+}
+
+# SSH (Direct)
+
+$VMAliases | ForEach-Object {
+    $VMAlias = $_
+    $VMName = $LabPrefix, $VMAlias -Join "-"
+
+    $MachineName = $VMName
+    $MachineFQDN = "$MachineName.$DnsZoneName"
+
+    $Params = @{
+        Name = "$MachineName";
+        Host = $MachineFQDN;
+        Type = "SSHShell";
+    }
+
+    $Session = New-RDMSession @Params
+    $Session.Group = $LANGroupName
+    $Session.CredentialConnectionID = $DomainAdminId
+    $Session.Terminal.Host = $MachineFQDN
+    $Session.Terminal.HostPort = 22
+    Set-RDMSession -Session $Session -Refresh:$Refresh
+}
+
+# SSH (Devolutions Gateway)
+
+$VMAliases | ForEach-Object {
+    $VMAlias = $_
+    $VMName = $LabPrefix, $VMAlias -Join "-"
+
+    $MachineName = $VMName
+    $MachineFQDN = "$MachineName.$DnsZoneName"
+
+    $Params = @{
+        Name = "$MachineName";
+        Host = $MachineFQDN;
+        Type = "SSHShell";
+    }
+
+    $Session = New-RDMSession @Params
+    $Session.Group = $DGWGroupName
+    $Session.CredentialConnectionID = $DomainAdminId
+    $Session.Terminal.Host = $MachineFQDN
+    $Session.Terminal.HostPort = 22
+    $Session.VPN.Application = "Inherited"
+    $Session.VPN.Enabled = $true
+    $Session.VPN.Mode = "AlwaysConnect"
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
