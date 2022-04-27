@@ -151,6 +151,20 @@ Invoke-Command -ScriptBlock {
     Remove-Item "OpenSSL.msi"
 } -Session $VMSession
 
+Write-Host "Downloading tools"
+
+Invoke-Command -ScriptBlock {
+    New-Item -ItemType Directory -Path "C:\tools" -ErrorAction SilentlyContinue | Out-Null
+    New-Item -ItemType Directory -Path "C:\tools\bin" -ErrorAction SilentlyContinue | Out-Null
+    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
+    Invoke-WebRequest 'https://npcap.com/dist/npcap-1.60.exe' -OutFile "C:\tools\npcap-1.60.exe"
+    Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "C:\tools\bepo-1.1rc2-full.exe"
+    Invoke-WebRequest 'https://dl.step.sm/gh-release/cli/docs-cli-install/v0.19.0/step_windows_0.19.0_amd64.zip' -OutFile "step_windows_0.19.0_amd64.zip"
+    Expand-Archive -LiteralPath .\step_windows_0.19.0_amd64.zip -DestinationPath .
+    Move-Item ".\step_0.19.0\bin\step.exe" "C:\tools\bin\step.exe"
+    Remove-Item .\step_* -Recurse
+} -Session $VMSession
+
 Write-Host "Configuring Firefox to trust system root CAs"
 
 Invoke-Command -ScriptBlock {
@@ -190,6 +204,8 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing PowerShell 7"
 
 Invoke-Command -ScriptBlock {
+    [Environment]::SetEnvironmentVariable("POWERSHELL_UPDATECHECK", "0", "Machine")
+    [Environment]::SetEnvironmentVariable("POWERSHELL_TELEMETRY_OPTOUT", "1", "Machine")
     iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
 } -Session $VMSession
 
