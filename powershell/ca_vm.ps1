@@ -59,6 +59,8 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     $HttpCrlDP = Get-CACrlDistributionPoint | Where-Object { $_.Uri -Like "http://*/CertEnroll/*" }
     Remove-CACrlDistributionPoint -Uri $HttpCrlDP.Uri -Force
     Add-CACrlDistributionPoint -Uri $HttpCrlDP.URI -AddToCertificateCdp -AddToFreshestCrl -Force
+    $LdapAIA = Get-CAAuthorityInformationAccess | Where-Object { $_.Uri -Like "ldap://*" }
+    Remove-CAAuthorityInformationAccess -Uri $LdapAIA.Uri -Force
     Restart-Service CertSvc
     Start-Sleep -Seconds 2 # Wait for CertSvc
     $CAConfigName = "$CAHostName\$CACommonName"
