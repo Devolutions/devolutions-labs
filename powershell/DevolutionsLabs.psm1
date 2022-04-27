@@ -28,14 +28,14 @@ function Get-DLabPath
         [string] $PathName
     )
 
-    $HyperVBasePath = "C:\Hyper-V"
+    $HyperVPath = if (Test-Path Env:DLAB_HOME) { $Env:DLAB_HOME } else { "C:\Hyper-V" }
 
     switch ($PathName) {
-        "ISOs" { Join-Path $HyperVBasePath "ISOs" }
-        "IMGs" { Join-Path $HyperVBasePath "IMGs" }
-        "VHDs" { Join-Path $HyperVBasePath "VHDs" }
-        "ChildDisks" { Join-Path $HyperVBasePath "VHDs" }
-        "ParentDisks" { Join-Path $HyperVBasePath "IMGs" }
+        "ISOs" { Join-Path $HyperVPath "ISOs" }
+        "IMGs" { Join-Path $HyperVPath "IMGs" }
+        "VHDs" { Join-Path $HyperVPath "VHDs" }
+        "ChildDisks" { Join-Path $HyperVPath "VHDs" }
+        "ParentDisks" { Join-Path $HyperVPath "IMGs" }
     }
 }
 

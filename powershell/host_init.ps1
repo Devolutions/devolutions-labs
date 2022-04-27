@@ -69,7 +69,7 @@ function Invoke-HostInit {
 
     # Create Hyper-V directory structure
 
-    $HyperVPath = "C:\Hyper-V"
+    $HyperVPath = if (Test-Path Env:DLAB_HOME) { $Env:DLAB_HOME } else { "C:\Hyper-V" }
     New-Item -ItemType Directory -Path $HyperVPath -ErrorAction SilentlyContinue | Out-Null
 
     @('ISOs','IMGs','VHDs','VFDs') | ForEach-Object {
