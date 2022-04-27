@@ -482,6 +482,8 @@ function New-DLabVM
         [Parameter(Mandatory=$true,Position=0)]
         [string] $Name,
         [string] $Password,
+        [Int64] $MemoryStartupBytes = 4GB,
+        [Int64] $ProcessorCount = 4,
         [switch] $Force
     )
 
@@ -522,7 +524,7 @@ function New-DLabVM
     $Params = @{
         Name = $Name;
         VHDPath = $ChildDisk.Path;
-        MemoryStartupBytes = 4GB;
+        MemoryStartupBytes = $MemoryStartupBytes;
         SwitchName = "LAN Switch";
     }
 
@@ -530,7 +532,7 @@ function New-DLabVM
 
     $Params = @{
         Name = $Name;
-        ProcessorCount = 4;
+        ProcessorCount = $ProcessorCount;
         AutomaticStopAction = "Shutdown";
         CheckpointType = "Disabled";
     }
