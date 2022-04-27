@@ -125,6 +125,7 @@ if ($InstallChocolateyPackages) {
             'vlc',
             '7zip',
             'gsudo',
+            'nssm',
             'firefox',
             'microsoft-edge',
             'vscode',
@@ -159,10 +160,24 @@ Invoke-Command -ScriptBlock {
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
     Invoke-WebRequest 'https://npcap.com/dist/npcap-1.60.exe' -OutFile "C:\tools\npcap-1.60.exe"
     Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "C:\tools\bepo-1.1rc2-full.exe"
+} -Session $VMSession
+
+Write-Host "Installing Smallstep CA"
+
+Invoke-Command -ScriptBlock {
+    $StepPath = Join-Path $Env:ProgramData "step"
+    New-Item -ItemType Directory -Path $StepPath -ErrorAction SilentlyContinue | Out-Null
+    New-Item -ItemType Directory -Path "$StepPath\bin" -ErrorAction SilentlyContinue | Out-Null
+    [Environment]::SetEnvironmentVariable("STEPPATH", $StepPath, "Machine")
+    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};$StepPath\bin", "Machine")
     Invoke-WebRequest 'https://dl.step.sm/gh-release/cli/docs-cli-install/v0.19.0/step_windows_0.19.0_amd64.zip' -OutFile "step_windows_0.19.0_amd64.zip"
     Expand-Archive -LiteralPath .\step_windows_0.19.0_amd64.zip -DestinationPath .
-    Move-Item ".\step_0.19.0\bin\step.exe" "C:\tools\bin\step.exe"
+    Move-Item ".\step_0.19.0\bin\step.exe" "$StepPath\bin\step.exe"
     Remove-Item .\step_* -Recurse
+    Invoke-WebRequest 'https://dl.step.sm/gh-release/certificates/gh-release-header/v0.19.0/step-ca_windows_0.19.0_amd64.zip' -OutFile "step-ca_windows_0.19.0_amd64.zip"
+    Expand-Archive -Path ".\step-ca_windows_0.19.0_amd64.zip" -DestinationPath .
+    Move-Item ".\step-ca_0.19.0\bin\step-ca.exe" "$StepPath\bin\step-ca.exe"
+    Remove-Item .\step-ca_* -Recurse
 } -Session $VMSession
 
 Write-Host "Configuring Firefox to trust system root CAs"
