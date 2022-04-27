@@ -128,7 +128,6 @@ if ($InstallChocolateyPackages) {
             'firefox',
             'microsoft-edge',
             'vscode',
-            'openssl',
             'kdiff3',
             'filezilla',
             'wireshark',
@@ -142,6 +141,15 @@ if ($InstallChocolateyPackages) {
         }
     } -Session $VMSession
 }
+
+Write-Host "Installing OpenSSL"
+
+Invoke-Command -ScriptBlock {
+    Invoke-WebRequest 'https://slproweb.com/download/Win64OpenSSL-3_0_2.msi' -OutFile "OpenSSL.msi"
+    Start-Process msiexec.exe -Wait -ArgumentList @("/i", "OpenSSL.msi", "/qn")
+    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\OpenSSL-Win64\bin", "Machine")
+    Remove-Item "OpenSSL.msi"
+} -Session $VMSession
 
 Write-Host "Configuring Firefox to trust system root CAs"
 
