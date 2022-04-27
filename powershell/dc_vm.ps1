@@ -5,7 +5,7 @@ $VMNumber = $DCVMNumber
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
-New-DLabVM $VMName -Password $Password -Force
+New-DLabVM $VMName -Password $Password -MemoryStartupBytes 2GB -ProcessorCount 2 -Force
 Start-DLabVM $VMName
 
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
