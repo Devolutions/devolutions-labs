@@ -180,6 +180,14 @@ Invoke-Command -ScriptBlock {
     Remove-Item .\step-ca_* -Recurse
 } -Session $VMSession
 
+Write-Host "Installing UltraVNC"
+
+Invoke-Command -ScriptBlock {
+    Invoke-WebRequest 'https://www.uvnc.eu/download/1381/UltraVNC_1_3_81_X64_Setup.exe' -OutFile "UltraVNC_1_3_81_X64_Setup.exe"
+    Start-Process .\UltraVNC_1_3_81_X64_Setup.exe -Wait -ArgumentList ("/VERYSILENT", "/NORESTART")
+    Remove-Item .\UltraVNC_1_3_81_X64_Setup.exe
+} -Session $VMSession
+
 Write-Host "Configuring Firefox to trust system root CAs"
 
 Invoke-Command -ScriptBlock {
