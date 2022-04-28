@@ -46,6 +46,9 @@ function Invoke-HostInit {
     New-Item -Path $RegPath -Force | Out-Null
     New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
 
+    New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Credssp" `
+        -Name UseCachedCRLOnlyAndIgnoreRevocationUnknownErrors -Value 1 -Force | Out-Null
+
     if ($(Get-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0").State -ne "Installed") {
         Add-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0"
     }
