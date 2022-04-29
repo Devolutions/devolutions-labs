@@ -86,6 +86,11 @@ if (-Not (Get-ChildItem "Cert:\LocalMachine\Root" |
     Import-Certificate -FilePath $CACertPath -CertStoreLocation "Cert:\LocalMachine\Root"
 }
 
+# Flush CRL cache
+
+& certutil.exe "-urlcache" "crl" "delete"
+& certutil.exe "-setreg" "chain\ChainCacheResyncFiletime" "@now"
+
 # Synchronize WinRM client trusted hosts
 
 $LabTrustedHost = "*.$DnsZoneName"
