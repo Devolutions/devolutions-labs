@@ -34,6 +34,7 @@ $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $Doma
 Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommonName)
     $ConfirmPreference = "High"
     Install-WindowsFeature -Name AD-Certificate -IncludeManagementTools
+    Install-WindowsFeature -Name ADCS-Online-Cert
     $Params = @{
         CAType = "EnterpriseRootCa";
         CryptoProviderName = "RSA#Microsoft Software Key Storage Provider";
