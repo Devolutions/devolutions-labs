@@ -937,6 +937,13 @@ function Request-DLabRdpCertificate
             Set-CimInstance -Property @{ SSLCertificateSHA1Hash = $RdpCertificateThumbprint }
 
     } -Session $VMSession -ArgumentList @($RdpServerName, $RdpCertificateFile, $RdpCertificatePassword)
+
+    Invoke-Command -ScriptBlock {
+        if (Test-Path Env:USERDOMAIN) {
+            $DomainUsers = "${Env:USERDOMAIN}\Domain Users"
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $DomainUsers -ErrorAction SilentlyContinue
+        }
+    } -Session $VMSession
 }
 
 function Set-DLabVMAutologon
