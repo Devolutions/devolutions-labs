@@ -186,6 +186,39 @@ Invoke-Command -ScriptBlock {
     Invoke-WebRequest 'https://www.uvnc.eu/download/1381/UltraVNC_1_3_81_X64_Setup.exe' -OutFile "UltraVNC_1_3_81_X64_Setup.exe"
     Start-Process .\UltraVNC_1_3_81_X64_Setup.exe -Wait -ArgumentList ("/VERYSILENT", "/NORESTART")
     Remove-Item .\UltraVNC_1_3_81_X64_Setup.exe
+    
+    $Params = @{
+        Name = "uvnc_service";
+        DisplayName = "UltraVNC Server";
+        Description = "Provides secure remote desktop sharing";
+        BinaryPathName = "$Env:ProgramFiles\uvnc bvba\UltraVNC\winvnc.exe -service";
+        DependsOn = "Tcpip";
+        StartupType = "Automatic";
+    }
+    New-Service @Params
+    
+    $Params = @{
+        DisplayName = "Allow UltraVNC";
+        Direction = "Inbound";
+        Program = "$Env:ProgramFiles\uvnc bvba\UltraVNC\winvnc.exe";
+        Action = "Allow"
+    }
+    New-NetFirewallRule @Params
+
+    $IniFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\ultravnc.ini"
+    $IniData = Get-Content $IniFile | foreach {
+        switch ($_) {
+            "MSLogonRequired=0" { "MSLogonRequired=1" }
+            "NewMSLogon=0" { "NewMSLogon=1" }
+            default { $_ }
+        }
+	}
+    $IniData | Set-Content -Path $IniFile
+
+    $AclFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\acl.txt"
+    $AclData = 'allow	0x00000003	"BUILTIN\Remote Desktop Users"'
+    $AclData | Set-Content -Path $AclFile
+    & "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" "/i" "/o" $AclFile
 } -Session $VMSession
 
 Write-Host "Configuring Firefox to trust system root CAs"
