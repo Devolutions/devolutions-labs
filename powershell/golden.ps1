@@ -213,11 +213,13 @@ Invoke-Command -ScriptBlock {
             default { $_ }
         }
 	}
-    $IniData | Set-Content -Path $IniFile
+    $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+    [System.IO.File]::WriteAllLines($IniFile, $IniData, $Utf8NoBomEncoding)
 
     $AclFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\acl.txt"
-    $AclData = 'allow	0x00000003	"BUILTIN\Remote Desktop Users"'
-    $AclData | Set-Content -Path $AclFile
+    $AclData = "allow`t0x00000003`t`"BUILTIN\Remote Desktop Users`""
+    $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+    [System.IO.File]::WriteAllLines($AclFile, $AclData, $Utf8NoBomEncoding)
     & "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" "/i" "/o" $AclFile
 } -Session $VMSession
 
