@@ -220,7 +220,7 @@ Invoke-Command -ScriptBlock {
     $AclData = "allow`t0x00000003`t`"BUILTIN\Remote Desktop Users`""
     $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
     [System.IO.File]::WriteAllLines($AclFile, $AclData, $Utf8NoBomEncoding)
-    & "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" "/i" "/o" $AclFile
+    Start-Process -FilePath "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" -ArgumentList @('/i', '/o', $AclFile) -Wait -NoNewWindow
 } -Session $VMSession
 
 Write-Host "Configuring Firefox to trust system root CAs"
