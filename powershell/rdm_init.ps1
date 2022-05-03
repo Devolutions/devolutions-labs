@@ -350,6 +350,55 @@ $VMAliases | ForEach-Object {
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
+# VNC (Direct)
+
+$VMAliases | ForEach-Object {
+    $VMAlias = $_
+    $VMName = $LabPrefix, $VMAlias -Join "-"
+
+    $MachineName = $VMName
+    $MachineFQDN = "$MachineName.$DnsZoneName"
+
+    $Params = @{
+        Name = "$MachineName";
+        Host = $MachineFQDN;
+        Type = "VNC";
+    }
+
+    $Session = New-RDMSession @Params
+    $Session.Group = $LANGroupName
+    $Session.CredentialConnectionID = $DomainAdminId
+    $Session.VNC.Host = $MachineFQDN
+    $Session.VNC.VNCEmbeddedType = "FreeVNC"
+    Set-RDMSession -Session $Session -Refresh:$Refresh
+}
+
+# VNC (Devolutions Gateway)
+
+$VMAliases | ForEach-Object {
+    $VMAlias = $_
+    $VMName = $LabPrefix, $VMAlias -Join "-"
+
+    $MachineName = $VMName
+    $MachineFQDN = "$MachineName.$DnsZoneName"
+
+    $Params = @{
+        Name = "$MachineName";
+        Host = $MachineFQDN;
+        Type = "VNC";
+    }
+
+    $Session = New-RDMSession @Params
+    $Session.Group = $DGWGroupName
+    $Session.CredentialConnectionID = $DomainAdminId
+    $Session.VNC.Host = $MachineFQDN
+    $Session.VNC.VNCEmbeddedType = "FreeVNC"
+    $Session.VPN.Application = "Inherited"
+    $Session.VPN.Enabled = $true
+    $Session.VPN.Mode = "AlwaysConnect"
+    Set-RDMSession -Session $Session -Refresh:$Refresh
+}
+
 # Active Directory Accounts
 
 if (Test-Path -Path "ADAccounts.json" -PathType 'Leaf') {
