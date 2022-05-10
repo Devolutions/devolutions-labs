@@ -146,7 +146,7 @@ if ($InstallChocolateyPackages) {
 Write-Host "Installing OpenSSL"
 
 Invoke-Command -ScriptBlock {
-    Invoke-WebRequest 'https://slproweb.com/download/Win64OpenSSL-3_0_2.msi' -OutFile "OpenSSL.msi"
+    Invoke-WebRequest 'https://slproweb.com/download/Win64OpenSSL-3_0_3.msi' -OutFile "OpenSSL.msi"
     Start-Process msiexec.exe -Wait -ArgumentList @("/i", "OpenSSL.msi", "/qn")
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\OpenSSL-Win64\bin", "Machine")
     Remove-Item "OpenSSL.msi"

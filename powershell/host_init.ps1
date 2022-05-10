@@ -20,8 +20,6 @@ function Invoke-HostInit {
         }
         choco install -y --no-progress vlc
         choco install -y --no-progress gsudo
-        choco install -y --no-progress firefox
-        choco install -y --no-progress microsoft-edge
         choco install -y --no-progress vscode
         choco install -y --no-progress openssl
         choco install -y --no-progress kdiff3
@@ -30,10 +28,6 @@ function Invoke-HostInit {
         choco install -y --no-progress sysinternals
         choco install -y --no-progress sublimetext3
         choco install -y --no-progress notepadplusplus
-
-        if ([System.Environment]::OSVersion.Version.Build -ge 18362) {
-            choco install -y --no-progress microsoft-windows-terminal
-        }
     }
 
     if (-Not (Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue)) {
