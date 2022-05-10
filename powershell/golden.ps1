@@ -146,7 +146,20 @@ if ($InstallChocolateyPackages) {
 Write-Host "Installing OpenSSL"
 
 Invoke-Command -ScriptBlock {
-    Invoke-WebRequest 'https://slproweb.com/download/Win64OpenSSL-3_0_3.msi' -OutFile "OpenSSL.msi"
+    $ProgressPreference = "SilentlyContinue"
+    $openssl_hashes = 'https://github.com/slproweb/opensslhashes/raw/master/win32_openssl_hashes.json'
+    $openssl_json = (Invoke-WebRequest -UseBasicParsing $openssl_hashes).Content | ConvertFrom-Json
+    $openssl_filenames = Get-Member -InputObject $openssl_json.files -MemberType NoteProperty | Select-Object -ExpandProperty Name
+    $openssl_file = $openssl_filenames | ForEach-Object { $openssl_json.files.$($_) } | Where-Object {
+        ($_.installer -eq 'msi') -and ($_.bits -eq 64) -and ($_.arch -eq 'INTEL') -and ($_.light -eq $false) -and ($_.basever -like "3.*")
+    } | Select-Object -First 1
+    $openssl_file_url = $openssl_file.url
+    $openssl_file_hash = $openssl_file.sha256
+    Invoke-WebRequest -UseBasicParsing $openssl_file_url -OutFile "OpenSSL.msi"
+    $FileHash = (Get-FileHash "OpenSSL.msi" -Algorithm SHA256).Hash
+    if ($FileHash -ine $openssl_file_hash) {
+        throw "Unexpected OpenSSL file hash: actual: $FileHash, expected: $openssl_file_hash"
+    }
     Start-Process msiexec.exe -Wait -ArgumentList @("/i", "OpenSSL.msi", "/qn")
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\OpenSSL-Win64\bin", "Machine")
     Remove-Item "OpenSSL.msi"
