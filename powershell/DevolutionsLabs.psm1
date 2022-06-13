@@ -524,7 +524,10 @@ function New-DLabVM
     $Params = @{
         Name = $Name;
         VHDPath = $ChildDisk.Path;
-        MemoryStartupBytes = $MemoryStartupBytes;
+        DynamicMemory = $true;
+        MemoryStartupBytes = $MemoryStartupBytes / 2;
+        MemoryMinimumBytes = $MemoryStartupBytes / 2;
+        MemoryMaximumBytes = $MemoryStartupBytes;
         SwitchName = "LAN Switch";
     }
 
@@ -943,6 +946,36 @@ function Request-DLabRdpCertificate
             $DomainUsers = "${Env:USERDOMAIN}\Domain Users"
             Add-LocalGroupMember -Group "Remote Desktop Users" -Member $DomainUsers -ErrorAction SilentlyContinue
         }
+    } -Session $VMSession
+}
+
+function Initialize-DLabVncServer
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession
+    )
+
+    Invoke-Command -ScriptBlock {
+        $IniFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\ultravnc.ini"
+        $IniData = Get-Content $IniFile | Foreach-Object {
+            switch ($_) {
+                "MSLogonRequired=0" { "MSLogonRequired=1" }
+                "NewMSLogon=0" { "NewMSLogon=1" }
+                default { $_ }
+            }
+        }
+        $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+        [System.IO.File]::WriteAllLines($IniFile, $IniData, $Utf8NoBomEncoding)
+    
+        $AclFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\acl.txt"
+        $AclData = "allow`t0x00000003`t`"BUILTIN\Remote Desktop Users`""
+        $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+        [System.IO.File]::WriteAllLines($AclFile, $AclData, $Utf8NoBomEncoding)
+        Start-Process -FilePath "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" -ArgumentList @('/i', '/o', $AclFile) -Wait -NoNewWindow
     } -Session $VMSession
 }
 

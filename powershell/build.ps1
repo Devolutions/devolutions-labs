@@ -10,10 +10,6 @@ Write-Host "Creating DC VM..."
 $TimeDC = Measure-Command { .\dc_vm.ps1 }
 Write-Host "DC VM creation time: $TimeDC"
 
-Write-Host "Creating CA VM..."
-$TimeCA = Measure-Command { .\ca_vm.ps1 }
-Write-Host "CA VM creation time: $TimeCA"
-
 Write-Host "Creating DVLS VM..."
 $TimeDVLS = Measure-Command { .\dvls_vm.ps1 }
 Write-Host "DVLS VM creation time: $TimeDVLS"
@@ -29,5 +25,5 @@ Write-Host "WAC VM creation time: $TimeWAC"
 Write-Host "Initializing Active Directory..."
 .\ad_init.ps1
 
-$TimeLab = $TimeRTR + $TimeDC + $TimeCA + $TimeDVLS + $TimeGW + $TimeWAC
+$TimeLab = $TimeRTR + $TimeDC + $TimeDVLS + $TimeGW + $TimeWAC
 Write-Host "Total $LabPrefix lab creation time: $TimeLab"

@@ -33,7 +33,7 @@ $DomainController = $DCMachineName
 $DCHostName = "$DCMachineName.$DomainName"
 $DCIpAddress = Get-DLabIpAddress $LabNetworkBase $DCVMNumber
 
-$CAMachineName = $LabPrefix, "CA" -Join "-"
+$CAMachineName = $LabPrefix, "DC" -Join "-"
 $CACommonName = $CAMachineName
 $CAHostName = "$CAMachineName.$DomainName"
 
