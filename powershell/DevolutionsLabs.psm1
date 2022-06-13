@@ -482,7 +482,7 @@ function New-DLabVM
         [Parameter(Mandatory=$true,Position=0)]
         [string] $Name,
         [string] $Password,
-        [Int64] $MemoryStartupBytes = 4GB,
+        [Int64] $MemoryBytes = 4GB,
         [Int64] $ProcessorCount = 4,
         [switch] $Force
     )
@@ -535,9 +535,9 @@ function New-DLabVM
         AutomaticStopAction = "Shutdown";
         CheckpointType = "Disabled";
         DynamicMemory = $true;
-        MemoryStartupBytes = $MemoryStartupBytes * 100 / 80;
-        MemoryMinimumBytes = $MemoryStartupBytes * 100 / 80;
-        MemoryMaximumBytes = $MemoryStartupBytes;
+        MemoryStartupBytes = [Int64] ($MemoryBytes * 80 / 100);
+        MemoryMinimumBytes = [Int64] ($MemoryBytes * 80 / 100);
+        MemoryMaximumBytes = $MemoryBytes;
     }
 
     Set-VM @Params
