@@ -535,8 +535,8 @@ function New-DLabVM
         AutomaticStopAction = "Shutdown";
         CheckpointType = "Disabled";
         DynamicMemory = $true;
-        MemoryStartupBytes = $MemoryStartupBytes / 2;
-        MemoryMinimumBytes = $MemoryStartupBytes / 2;
+        MemoryStartupBytes = $MemoryStartupBytes * 100 / 80;
+        MemoryMinimumBytes = $MemoryStartupBytes * 100 / 80;
         MemoryMaximumBytes = $MemoryStartupBytes;
     }
 

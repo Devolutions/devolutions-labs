@@ -19,8 +19,14 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
 Invoke-Command -ScriptBlock { Param($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
     Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
     $SafeModeAdministratorPassword = ConvertTo-SecureString $SafeModeAdministratorPassword -AsPlainText -Force
-    Install-ADDSForest -DomainName $DomainName -DomainNetbiosName $DomainNetbiosName -InstallDNS `
-        -SafeModeAdministratorPassword $SafeModeAdministratorPassword -Force
+    $Params = @{
+        DomainName = $DomainName;
+        DomainNetbiosName = $DomainNetbiosName;
+        SafeModeAdministratorPassword = $SafeModeAdministratorPassword;
+        InstallDNS = $true;
+        SkipPreChecks = $true;
+    }
+    Install-ADDSForest @Params -Force
 } -Session $VMSession -ArgumentList @($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
 
 Wait-DLabVM $VMName 'Reboot' -Timeout 120
