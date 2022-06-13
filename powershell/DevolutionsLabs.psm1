@@ -524,10 +524,6 @@ function New-DLabVM
     $Params = @{
         Name = $Name;
         VHDPath = $ChildDisk.Path;
-        DynamicMemory = $true;
-        MemoryStartupBytes = $MemoryStartupBytes / 2;
-        MemoryMinimumBytes = $MemoryStartupBytes / 2;
-        MemoryMaximumBytes = $MemoryStartupBytes;
         SwitchName = "LAN Switch";
     }
 
@@ -538,6 +534,10 @@ function New-DLabVM
         ProcessorCount = $ProcessorCount;
         AutomaticStopAction = "Shutdown";
         CheckpointType = "Disabled";
+        DynamicMemory = $true;
+        MemoryStartupBytes = $MemoryStartupBytes / 2;
+        MemoryMinimumBytes = $MemoryStartupBytes / 2;
+        MemoryMaximumBytes = $MemoryStartupBytes;
     }
 
     Set-VM @Params
