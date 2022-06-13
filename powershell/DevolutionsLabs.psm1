@@ -979,6 +979,28 @@ function Initialize-DLabVncServer
     } -Session $VMSession
 }
 
+function Initialize-DLabPSRemoting
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession
+    )
+
+    Invoke-Command -ScriptBlock {
+        $FullComputerName = [System.Net.DNS]::GetHostByName($Env:ComputerName).HostName
+        $Certificate = Get-ChildItem "cert:\LocalMachine\My" | Where-Object {
+            ($_.Subject -eq "CN=$FullComputerName") -and ($_.Issuer -ne $_.Subject)
+        } | Select-Object -First 1
+        $CertificateThumbprint = $Certificate.Thumbprint
+
+        & winrm create winrm/config/Listener?Address=*+Transport=HTTPS "@{Hostname=`"$FullComputerName`";CertificateThumbprint=`"$CertificateThumbprint`"}"
+        & netsh advfirewall firewall add rule name="WinRM-HTTPS" dir=in localport=5986 protocol=TCP action=allow
+    } -Session $VMSession
+}
+
 function Set-DLabVMAutologon
 {
     [CmdletBinding()]

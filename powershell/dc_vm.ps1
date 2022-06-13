@@ -99,6 +99,10 @@ Write-Host "Requesting RDP server certificate"
 Request-DLabRdpCertificate $VMName -VMSession $VMSession `
     -CAHostName $CAHostName -CACommonName $CACommonName
 
+Write-Host "Initializing PSRemoting"
+
+Initialize-DLabPSRemoting $VMName -VMSession $VMSession
+
 Write-Host "Initializing VNC server"
 
 Initialize-DLabVncServer $VMName -VMSession $VMSession
@@ -107,8 +111,9 @@ Write-Host "Configuring LDAPS certificate"
 
 Invoke-Command -ScriptBlock {
     $FullComputerName = [System.Net.DNS]::GetHostByName($Env:ComputerName).HostName
-    $Certificate = Get-ChildItem "cert:\LocalMachine\My" |
-        Where-Object { $_.Subject -eq "CN=$FullComputerName" } | Select-Object -First 1
+    $Certificate = Get-ChildItem "cert:\LocalMachine\My" | Where-Object {
+        ($_.Subject -eq "CN=$FullComputerName") -and ($_.Issuer -ne $_.Subject)
+    } | Select-Object -First 1
     $CertificateThumbprint = $Certificate.Thumbprint
     
     $LocalCertStore = 'HKLM:/Software/Microsoft/SystemCertificates/My/Certificates'
