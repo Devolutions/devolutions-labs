@@ -168,10 +168,12 @@ Invoke-Command -ScriptBlock {
 Write-Host "Downloading tools"
 
 Invoke-Command -ScriptBlock {
+    $ProgressPreference = "SilentlyContinue"
     New-Item -ItemType Directory -Path "C:\tools" -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "C:\tools\bin" -ErrorAction SilentlyContinue | Out-Null
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
     Invoke-WebRequest 'https://npcap.com/dist/npcap-1.60.exe' -OutFile "C:\tools\npcap-1.60.exe"
+    Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "C:\tools\CCProxySetup.exe"
     Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "C:\tools\bepo-1.1rc2-full.exe"
 } -Session $VMSession
 

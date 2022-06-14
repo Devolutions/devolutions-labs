@@ -34,6 +34,14 @@ Write-Host "Requesting RDP server certificate"
 Request-DLabRdpCertificate $VMName -VMSession $VMSession `
     -CAHostName $CAHostName -CACommonName $CACommonName
 
+Write-Host "Initializing PSRemoting"
+
+Initialize-DLabPSRemoting $VMName -VMSession $VMSession
+
+Write-Host "Initializing VNC server"
+
+Initialize-DLabVncServer $VMName -VMSession $VMSession
+
 Write-Host "Installing IIS features"
 
 Invoke-Command -ScriptBlock {
@@ -52,7 +60,8 @@ Invoke-Command -ScriptBlock {
     'Web-Digest-Auth',
     'Web-Stat-Compression',
     'Web-Windows-Auth',
-    'Web-Mgmt-Tools'
+    'Web-Mgmt-Tools',
+    'Web-WebSockets'
     ) | Foreach-Object { Install-WindowsFeature -Name $_ | Out-Null }
 } -Session $VMSession
 

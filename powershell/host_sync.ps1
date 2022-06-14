@@ -60,7 +60,7 @@ $HostEntries | Where-Object { $_.HostName -NotLike "$LabPrefix-*" } | ForEach-Ob
 
 # Synchronize trusted root CAs
 
-$VMAlias = "CA"
+$VMAlias = "DC"
 $VMName = $LabPrefix, $VMAlias -Join "-"
 
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword

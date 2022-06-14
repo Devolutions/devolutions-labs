@@ -34,6 +34,14 @@ Write-Host "Requesting RDP server certificate"
 Request-DLabRdpCertificate $VMName -VMSession $VMSession `
     -CAHostName $CAHostName -CACommonName $CACommonName
 
+Write-Host "Initializing PSRemoting"
+
+Initialize-DLabPSRemoting $VMName -VMSession $VMSession
+
+Write-Host "Initializing VNC server"
+
+Initialize-DLabVncServer $VMName -VMSession $VMSession
+
 # Install Remote Desktop Gateway
 
 Write-Host "Installing RD Gateway, RD Web Access and RD Connection Broker"

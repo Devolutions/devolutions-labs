@@ -482,7 +482,7 @@ function New-DLabVM
         [Parameter(Mandatory=$true,Position=0)]
         [string] $Name,
         [string] $Password,
-        [Int64] $MemoryStartupBytes = 4GB,
+        [Int64] $MemoryBytes = 4GB,
         [Int64] $ProcessorCount = 4,
         [switch] $Force
     )
@@ -524,7 +524,6 @@ function New-DLabVM
     $Params = @{
         Name = $Name;
         VHDPath = $ChildDisk.Path;
-        MemoryStartupBytes = $MemoryStartupBytes;
         SwitchName = "LAN Switch";
     }
 
@@ -535,6 +534,10 @@ function New-DLabVM
         ProcessorCount = $ProcessorCount;
         AutomaticStopAction = "Shutdown";
         CheckpointType = "Disabled";
+        DynamicMemory = $true;
+        MemoryStartupBytes = [Int64] ($MemoryBytes * 80 / 100);
+        MemoryMinimumBytes = [Int64] ($MemoryBytes * 80 / 100);
+        MemoryMaximumBytes = $MemoryBytes;
     }
 
     Set-VM @Params
@@ -943,6 +946,58 @@ function Request-DLabRdpCertificate
             $DomainUsers = "${Env:USERDOMAIN}\Domain Users"
             Add-LocalGroupMember -Group "Remote Desktop Users" -Member $DomainUsers -ErrorAction SilentlyContinue
         }
+    } -Session $VMSession
+}
+
+function Initialize-DLabVncServer
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession
+    )
+
+    Invoke-Command -ScriptBlock {
+        $IniFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\ultravnc.ini"
+        $IniData = Get-Content $IniFile | Foreach-Object {
+            switch ($_) {
+                "MSLogonRequired=0" { "MSLogonRequired=1" }
+                "NewMSLogon=0" { "NewMSLogon=1" }
+                default { $_ }
+            }
+        }
+        $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+        [System.IO.File]::WriteAllLines($IniFile, $IniData, $Utf8NoBomEncoding)
+    
+        $AclFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\acl.txt"
+        $AclData = "allow`t0x00000003`t`"BUILTIN\Remote Desktop Users`""
+        $Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+        [System.IO.File]::WriteAllLines($AclFile, $AclData, $Utf8NoBomEncoding)
+        Start-Process -FilePath "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" -ArgumentList @('/i', '/o', $AclFile) -Wait -NoNewWindow
+    } -Session $VMSession
+}
+
+function Initialize-DLabPSRemoting
+{
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true,Position=0)]
+        [string] $VMName,
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.Runspaces.PSSession] $VMSession
+    )
+
+    Invoke-Command -ScriptBlock {
+        $FullComputerName = [System.Net.DNS]::GetHostByName($Env:ComputerName).HostName
+        $Certificate = Get-ChildItem "cert:\LocalMachine\My" | Where-Object {
+            ($_.Subject -eq "CN=$FullComputerName") -and ($_.Issuer -ne $_.Subject)
+        } | Select-Object -First 1
+        $CertificateThumbprint = $Certificate.Thumbprint
+
+        & winrm create winrm/config/Listener?Address=*+Transport=HTTPS "@{Hostname=`"$FullComputerName`";CertificateThumbprint=`"$CertificateThumbprint`"}"
+        & netsh advfirewall firewall add rule name="WinRM-HTTPS" dir=in localport=5986 protocol=TCP action=allow
     } -Session $VMSession
 }
 

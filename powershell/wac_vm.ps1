@@ -34,6 +34,14 @@ Write-Host "Requesting RDP server certificate"
 Request-DLabRdpCertificate $VMName -VMSession $VMSession `
     -CAHostName $CAHostName -CACommonName $CACommonName
 
+Write-Host "Initializing PSRemoting"
+
+Initialize-DLabPSRemoting $VMName -VMSession $VMSession
+
+Write-Host "Initializing VNC server"
+
+Initialize-DLabVncServer $VMName -VMSession $VMSession
+
 Write-Host "Creating DNS record for Windows Admin Center"
 
 $DnsName = "wac"
