@@ -89,8 +89,14 @@ Invoke-Command -ScriptBlock {
 Write-Host "Disabling 'Activate Windows' watermark on desktop"
 
 Invoke-Command -ScriptBlock {
-    $ActivationReg = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\Activation"
-    Set-ItemProperty -Path $ActivationReg -Name 'Manual' -Value '1' -Type DWORD
+    Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\Activation' -Name 'Manual' -Value '1' -Type DWORD
+
+    $TaskAction = New-ScheduledTaskAction -Execute 'powershell.exe' `
+	    -Argument "-Command { Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\Activation' -Name 'Manual' -Value '1' -Type DWORD }"
+
+    $TaskTrigger = New-ScheduledTaskTrigger -AtStartup
+
+    Register-ScheduledTask -Action $TaskAction -Trigger $TaskTrigger -TaskName "Activation Watermark" -Description "Remove Windows Activation Watermark"
 } -Session $VMSession
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
