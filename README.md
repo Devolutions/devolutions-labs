@@ -52,6 +52,8 @@ Last but not least, install PowerShell 7 using an elevated Windows PowerShell te
 &([ScriptBlock]::Create((irm "https://aka.ms/install-powershell.ps1"))) -UseMSI -Quiet
 ```
 
+At this point, it is advised to reboot.
+
 From this point forward, always use PowerShell 7, as Windows PowerShell compatibility is not guaranteed.
 
 ## Host Initialization
