@@ -7,9 +7,8 @@ $LabDnsTld = ".ninja"
 $LabCompanyName = "IT Help Ninja"
 $LabName = $LabPrefix.ToLower() + $LabDnsTld
 
-$DomainUser = "Administrator"
-$UserName = "Administrator"
-$Password = "DevoLabs123!"
+$LocalUserName = "Administrator"
+$LocalPassword = "Local123!"
 
 $WanSwitchName = "NAT Switch"
 $LanSwitchName = "LAN Switch"
@@ -38,7 +37,7 @@ $CACommonName = $CAMachineName
 $CAHostName = "$CAMachineName.$DomainName"
 
 $DomainUserName = "$DomainNetbiosName\Administrator"
-$DomainPassword = $Password
+$DomainPassword = "DevoLabs123!"
 
 $DnsServerForwarder = "1.1.1.1"
 $DnsServerAddress = $DCIpAddress

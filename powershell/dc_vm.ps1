@@ -5,16 +5,28 @@ $VMNumber = $DCVMNumber
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
-New-DLabVM $VMName -Password $Password -MemoryBytes 2GB -ProcessorCount 2 -Force
+New-DLabVM $VMName -Password $DomainPassword -MemoryBytes 2GB -ProcessorCount 2 -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
-$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $DomainPassword
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $DomainPassword
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -SwitchName $SwitchName -NetAdapterName $NetAdapterName `
     -IPAddress $IPAddress -DefaultGateway $DefaultGateway `
     -DnsServerAddress $DnsServerForwarder
+
+Write-Host "Test Internet connectivity"
+
+$ConnectionTest = Invoke-Command -ScriptBlock {
+    Test-Connection -Ping "www.google.com" -IPv4 -ErrorAction SilentlyContinue
+} -Session $VMSession
+
+if (-Not $ConnectionTest) {
+    throw "virtual machine doesn't have Internet access - fail early"
+}
+
+Write-Host "Promote Windows Server to domain controller"
 
 Invoke-Command -ScriptBlock { Param($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
     Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
@@ -35,6 +47,8 @@ $BootTime = Get-Date
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
+Write-Host "Wait for domain controller promotion to complete (about 10 minutes)"
+
 # wait a good 5-10 minutes for the domain controller promotion to complete after reboot
 
 Invoke-Command -ScriptBlock { Param($BootTime)
@@ -52,13 +66,20 @@ Invoke-Command -ScriptBlock {
     New-SmbShare -Name "Shared" -Path "C:\Shared" -FullAccess 'ANONYMOUS LOGON','Everyone'
 } -Session $VMSession
 
+Write-Host "Change local administrator password"
+
+Invoke-Command -ScriptBlock { Param($LocalUserName, $LocalPassword)
+    $SafeLocalPassword = ConvertTo-SecureString $LocalPassword -AsPlainText -Force
+    Set-LocalUser -Name $LocalUserName -Password $SafeLocalPassword
+} -Session $VMSession -ArgumentList @($LocalUserName, $LocalPassword)
+
 Write-Host "Disable Active Directory default password expiration policy"
 
 Invoke-Command -ScriptBlock {
     Get-ADDefaultDomainPasswordPolicy -Current LoggedOnUser | Set-ADDefaultDomainPasswordPolicy -MaxPasswordAge 00.00:00:00
 } -Session $VMSession
 
-# Install Active Directory Certificate Services
+Write-Host "Install Active Directory Certificate Services"
 
 Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommonName)
     $ConfirmPreference = "High"
@@ -92,7 +113,7 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     $LdapAIA = Get-CAAuthorityInformationAccess | Where-Object { $_.Uri -Like "ldap://*" }
     Remove-CAAuthorityInformationAccess -Uri $LdapAIA.Uri -Force
     Restart-Service CertSvc
-    Start-Sleep -Seconds 2 # Wait for CertSvc
+    Start-Sleep -Seconds 10 # Wait for CertSvc
     $CAConfigName = "$CAHostName\$CACommonName"
     $CertAdmin = New-Object -COM "CertificateAuthority.Admin"
     # PublishCRLs flags: RePublish = 0x10 (16), BaseCRL = 1, DeltaCRL = 2
