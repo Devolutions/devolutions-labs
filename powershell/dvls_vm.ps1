@@ -70,9 +70,9 @@ Write-Host "Installing IIS ASP.NET Core Module (ANCM)"
 Invoke-Command -ScriptBlock {
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-6.0
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle?view=aspnetcore-6.0
-    $DotNetHostingFileName = "dotnet-hosting-6.0.4-win.exe"
-    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/0c2039d2-0072-43a8-bb20-766b9a91d001/0e2288a2f07743e63778416b2367bb88/$DotNetHostingFileName"
-    $DotNetHostingFileSHA512 = 'a03a798060f1a7044042e96e7f4134c6b090da5e3e6ea5acbe225dc979a4cbbf931db76306719e7029e09664f178e980d0f5d41f54e8deaa4d0febecb4634a4b'
+    $DotNetHostingFileName = "dotnet-hosting-6.0.10-win.exe"
+    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/870aa66a-733e-45fa-aecb-27aaec423f40/833d0387587b9fb35e47e75f2cfe0288/$DotNetHostingFileName"
+    $DotNetHostingFileSHA512 = 'fbb8653545c426ff62788b9493074b48e8590dde33fb0912a220e0f56589785229ad9f3fda7e9c3b3accde2c0221fe3c62b302a50898c3d398a32f9ab6d1c0d3'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
     if ($DotNetHostingFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetHostingFileName`: $DotNetHostingFileSHA512" }
@@ -154,7 +154,8 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2022.1.12.0"
+$DvlsVersion = "2022.2.11.0"
+$GatewayVersion = "2022.3.1.0"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
 $DvlsAdminPassword = "dvls-admin123!"
@@ -218,16 +219,22 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion)
 
 Write-Host "Install Devolutions Server"
 
-Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath, $DvlsAccessUri,
+Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
+    $DvlsPath, $DvlsAccessUri,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword, $DvlsAdminEmail)
 
     $ProgressPreference = 'SilentlyContinue'
     $DownloadBaseUrl = "https://cdn.devolutions.net/download"
-    $DvlsWebAppZip = "$(Resolve-Path ~)\Documents\DVLS.${DvlsVersion}.zip"
 
+    $DvlsWebAppZip = "$(Resolve-Path ~)\Documents\DVLS.${DvlsVersion}.zip"
     if (-Not $(Test-Path -Path $DvlsWebAppZip -PathType 'Leaf')) {
         Invoke-WebRequest "$DownloadBaseUrl/RDMS/DVLS.${DvlsVersion}.zip" -OutFile $DvlsWebAppZip
+    }
+
+    $GatewayMsi = "$(Resolve-Path ~)\Documents\DevolutionsGateway.msi"
+    if (-Not $(Test-Path -Path $GatewayMsi -PathType 'Leaf')) {
+        Invoke-WebRequest "$DownloadBaseUrl/DevolutionsGateway-x86_64-${GatewayVersion}.msi" -OutFile $GatewayMsi
     }
 
     $BackupKeysPassword = "DvlsBackupKeys123!"
@@ -251,6 +258,8 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath, $DvlsAccessUri,
         "--databaseName=`"dvls`"",
         "--db-username=$SqlUsername",
         "--db-password=$SqlPassword",
+        "--install-devolutions-gateway",
+        "--gateway-msi=`"$GatewayMsi`"",
         "--disableEncryptConfig",
         "--disablePassword")
 
@@ -258,6 +267,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $DvlsPath, $DvlsAccessUri,
 
     & $DvlsConsoleCli @DvlsConsoleArgs
 
-} -Session $VMSession -ArgumentList @($DvlsVersion, $DvlsPath, $DvlsAccessUri,
+} -Session $VMSession -ArgumentList @($DvlsVersion, $GatewayVersion,
+    $DvlsPath, $DvlsAccessUri,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword, $DvlsAdminEmail)

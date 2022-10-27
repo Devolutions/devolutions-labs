@@ -47,7 +47,7 @@ apk add --no-cache ca-certificates less \
 
 apk -X https://dl-cdn.alpinelinux.org/alpine/edge/main add --no-cache lttng-ust
 
-curl -L https://github.com/PowerShell/PowerShell/releases/download/v7.1.3/powershell-7.1.3-linux-alpine-x64.tar.gz -o /tmp/powershell.tar.gz
+curl -L https://github.com/PowerShell/PowerShell/releases/download/v7.2.7/powershell-7.2.7-linux-alpine-x64.tar.gz -o /tmp/powershell.tar.gz
 
 mkdir -p /opt/microsoft/powershell/7
 tar zxf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7

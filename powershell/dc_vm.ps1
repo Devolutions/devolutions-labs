@@ -8,8 +8,8 @@ $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 New-DLabVM $VMName -Password $DomainPassword -MemoryBytes 2GB -ProcessorCount 2 -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $DomainPassword
-$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $DomainPassword
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $LocalUserName -Password $DomainPassword
+$VMSession = New-DLabVMSession $VMName -UserName $LocalUserName -Password $DomainPassword
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -SwitchName $SwitchName -NetAdapterName $NetAdapterName `
@@ -19,7 +19,10 @@ Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
 Write-Host "Test Internet connectivity"
 
 $ConnectionTest = Invoke-Command -ScriptBlock {
-    Test-Connection -Ping "www.google.com" -IPv4 -ErrorAction SilentlyContinue
+    1..10 | ForEach-Object {
+        Start-Sleep -Seconds 1;
+        Resolve-DnsName -Name "www.google.com" -Type 'A' -DnsOnly -QuickTimeout -ErrorAction SilentlyContinue
+    } | Where-Object { $_ -ne $null } | Select-Object -First 1
 } -Session $VMSession
 
 if (-Not $ConnectionTest) {
@@ -65,13 +68,6 @@ Invoke-Command -ScriptBlock {
     New-Item "C:\Shared" -ItemType "Directory" | Out-Null
     New-SmbShare -Name "Shared" -Path "C:\Shared" -FullAccess 'ANONYMOUS LOGON','Everyone'
 } -Session $VMSession
-
-Write-Host "Change local administrator password"
-
-Invoke-Command -ScriptBlock { Param($LocalUserName, $LocalPassword)
-    $SafeLocalPassword = ConvertTo-SecureString $LocalPassword -AsPlainText -Force
-    Set-LocalUser -Name $LocalUserName -Password $SafeLocalPassword
-} -Session $VMSession -ArgumentList @($LocalUserName, $LocalPassword)
 
 Write-Host "Disable Active Directory default password expiration policy"
 
