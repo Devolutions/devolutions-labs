@@ -58,6 +58,11 @@ $HostEntries | Where-Object { $_.HostName -NotLike "$LabPrefix-*" } | ForEach-Ob
     Set-HostEntrySafe -Name $HostFQDN -Address $_.Address -Force
 }
 
+# Add DNS client rule for lab DNS suffix
+
+Get-DnsClientNrptRule | Where-Object { $_.Namespace -eq ".$DnsZoneName" } | Remove-DnsClientNrptRule -Force
+Add-DnsClientNrptRule -Namespace ".$DnsZoneName" -NameServers @($DnsServerAddress)
+
 # Synchronize trusted root CAs
 
 $VMAlias = "DC"

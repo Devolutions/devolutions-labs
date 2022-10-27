@@ -5,11 +5,11 @@ $VMNumber = 8
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
-New-DLabVM $VMName -Password $Password -Force
+New-DLabVM $VMName -Password $LocalPassword -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $UserName -Password $Password
-$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $LocalUserName -Password $LocalPassword
+$VMSession = New-DLabVMSession $VMName -UserName $LocalUserName -Password $LocalPassword
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -SwitchName $SwitchName -NetAdapterName $NetAdapterName `

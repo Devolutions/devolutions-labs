@@ -5,16 +5,31 @@ $VMNumber = $DCVMNumber
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
-New-DLabVM $VMName -Password $Password -MemoryBytes 2GB -ProcessorCount 2 -Force
+New-DLabVM $VMName -Password $DomainPassword -MemoryBytes 2GB -ProcessorCount 2 -Force
 Start-DLabVM $VMName
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
-$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $LocalUserName -Password $DomainPassword
+$VMSession = New-DLabVMSession $VMName -UserName $LocalUserName -Password $DomainPassword
 
 Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
     -SwitchName $SwitchName -NetAdapterName $NetAdapterName `
     -IPAddress $IPAddress -DefaultGateway $DefaultGateway `
     -DnsServerAddress $DnsServerForwarder
+
+Write-Host "Test Internet connectivity"
+
+$ConnectionTest = Invoke-Command -ScriptBlock {
+    1..10 | ForEach-Object {
+        Start-Sleep -Seconds 1;
+        Resolve-DnsName -Name "www.google.com" -Type 'A' -DnsOnly -QuickTimeout -ErrorAction SilentlyContinue
+    } | Where-Object { $_ -ne $null } | Select-Object -First 1
+} -Session $VMSession
+
+if (-Not $ConnectionTest) {
+    throw "virtual machine doesn't have Internet access - fail early"
+}
+
+Write-Host "Promote Windows Server to domain controller"
 
 Invoke-Command -ScriptBlock { Param($DomainName, $DomainNetbiosName, $SafeModeAdministratorPassword)
     Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
@@ -34,6 +49,8 @@ $BootTime = Get-Date
 
 Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
+
+Write-Host "Wait for domain controller promotion to complete (about 10 minutes)"
 
 # wait a good 5-10 minutes for the domain controller promotion to complete after reboot
 
@@ -58,7 +75,33 @@ Invoke-Command -ScriptBlock {
     Get-ADDefaultDomainPasswordPolicy -Current LoggedOnUser | Set-ADDefaultDomainPasswordPolicy -MaxPasswordAge 00.00:00:00
 } -Session $VMSession
 
-# Install Active Directory Certificate Services
+Write-Host "Create ProtectedUser test account in Protected Users group"
+
+$ProtectedUserName = "ProtectedUser"
+$ProtectedUserPassword = "Protected123!"
+
+Invoke-Command -ScriptBlock { Param($ProtectedUserName, $ProtectedUserPassword)
+    $SafeProtectedUserPassword = ConvertTo-SecureString $ProtectedUserPassword -AsPlainText -Force
+    $DomainDnsName = $Env:UserDnsDomain.ToLower()
+    
+    $Params = @{
+        Name = $ProtectedUserName;
+        GivenName = "Protected";
+        Surname = "User";
+        SamAccountName = "ProtectedUser";
+        UserPrincipalName = "ProtectedUser@$DomainDnsName";
+        AccountPassword = $SafeProtectedUserPassword;
+        PasswordNeverExpires = $true;
+        Description = "User member of the Protected Users group";
+        Enabled = $true;
+    }
+    $ProtectedUser = New-ADUser @Params -PassThru
+    
+    Add-ADGroupMember -Identity "Protected Users" -Members @($ProtectedUser)
+    Add-ADGroupMember -Identity "Domain Admins" -Members @($ProtectedUser)
+} -Session $VMSession -ArgumentList @($ProtectedUserName, $ProtectedUserPassword)
+
+Write-Host "Install Active Directory Certificate Services"
 
 Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommonName)
     $ConfirmPreference = "High"
@@ -92,7 +135,7 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     $LdapAIA = Get-CAAuthorityInformationAccess | Where-Object { $_.Uri -Like "ldap://*" }
     Remove-CAAuthorityInformationAccess -Uri $LdapAIA.Uri -Force
     Restart-Service CertSvc
-    Start-Sleep -Seconds 2 # Wait for CertSvc
+    Start-Sleep -Seconds 10 # Wait for CertSvc
     $CAConfigName = "$CAHostName\$CACommonName"
     $CertAdmin = New-Object -COM "CertificateAuthority.Admin"
     # PublishCRLs flags: RePublish = 0x10 (16), BaseCRL = 1, DeltaCRL = 2
