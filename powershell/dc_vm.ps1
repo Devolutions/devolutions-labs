@@ -75,6 +75,32 @@ Invoke-Command -ScriptBlock {
     Get-ADDefaultDomainPasswordPolicy -Current LoggedOnUser | Set-ADDefaultDomainPasswordPolicy -MaxPasswordAge 00.00:00:00
 } -Session $VMSession
 
+Write-Host "Create ProtectedUser test account in Protected Users group"
+
+$ProtectedUserName = "ProtectedUser"
+$ProtectedUserPassword = "Protected123!"
+
+Invoke-Command -ScriptBlock { Param($ProtectedUserName, $ProtectedUserPassword)
+    $SafeProtectedUserPassword = ConvertTo-SecureString $ProtectedUserPassword -AsPlainText -Force
+    $DomainDnsName = $Env:UserDnsDomain.ToLower()
+    
+    $Params = @{
+        Name = $ProtectedUserName;
+        GivenName = "Protected";
+        Surname = "User";
+        SamAccountName = "ProtectedUser";
+        UserPrincipalName = "ProtectedUser@$DomainDnsName";
+        AccountPassword = $SafeProtectedUserPassword;
+        PasswordNeverExpires = $true;
+        Description = "User member of the Protected Users group";
+        Enabled = $true;
+    }
+    $ProtectedUser = New-ADUser @Params -PassThru
+    
+    Add-ADGroupMember -Identity "Protected Users" -Members @($ProtectedUser)
+    Add-ADGroupMember -Identity "Domain Admins" -Members @($ProtectedUser)
+} -Session $VMSession -ArgumentList @($ProtectedUserName, $ProtectedUserPassword)
+
 Write-Host "Install Active Directory Certificate Services"
 
 Invoke-Command -ScriptBlock { Param($DomainName, $UserName, $Password, $CACommonName)
