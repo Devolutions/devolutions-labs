@@ -70,9 +70,9 @@ Write-Host "Installing IIS ASP.NET Core Module (ANCM)"
 Invoke-Command -ScriptBlock {
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-6.0
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle?view=aspnetcore-6.0
-    $DotNetHostingFileName = "dotnet-hosting-6.0.10-win.exe"
-    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/870aa66a-733e-45fa-aecb-27aaec423f40/833d0387587b9fb35e47e75f2cfe0288/$DotNetHostingFileName"
-    $DotNetHostingFileSHA512 = 'fbb8653545c426ff62788b9493074b48e8590dde33fb0912a220e0f56589785229ad9f3fda7e9c3b3accde2c0221fe3c62b302a50898c3d398a32f9ab6d1c0d3'
+    $DotNetHostingFileName = "dotnet-hosting-6.0.11-win.exe"
+    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/db07eed5-297a-45b8-bea2-1e93c623a88c/6e5a8d3432e6213f071be3751ae53a08/$DotNetHostingFileName"
+    $DotNetHostingFileSHA512 = '95183f2a3a017954f5cc7b7146ad79eacea6e26869fb4e780f5bf305d47663d9de993211ad467d070122903d91e340d961445c5634495df9a073ed6e2f05d8d5'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
     if ($DotNetHostingFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetHostingFileName`: $DotNetHostingFileSHA512" }
@@ -154,7 +154,7 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2022.2.11.0"
+$DvlsVersion = "2022.3.4.0"
 $GatewayVersion = "2022.3.1.0"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"

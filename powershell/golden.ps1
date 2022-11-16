@@ -194,13 +194,13 @@ Invoke-Command -ScriptBlock {
     New-Item -ItemType Directory -Path "$StepPath\bin" -ErrorAction SilentlyContinue | Out-Null
     [Environment]::SetEnvironmentVariable("STEPPATH", $StepPath, "Machine")
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};$StepPath\bin", "Machine")
-    Invoke-WebRequest 'https://dl.step.sm/gh-release/cli/gh-release-header/v${StepVersion}/step_windows_${StepVersion}_amd64.zip' -OutFile "step_windows_${StepVersion}_amd64.zip"
+    Invoke-WebRequest "https://dl.step.sm/gh-release/cli/gh-release-header/v${StepVersion}/step_windows_${StepVersion}_amd64.zip" -OutFile "step_windows_${StepVersion}_amd64.zip"
     Expand-Archive -Path ".\step_windows_${StepVersion}_amd64.zip" -DestinationPath .
     Move-Item ".\step_${StepVersion}\bin\step.exe" "$StepPath\bin\step.exe"
     Remove-Item .\step_* -Recurse
-    Invoke-WebRequest 'https://dl.step.sm/gh-release/certificates/gh-release-header/v${StepVersion}/step-ca_windows_${StepVersion}_amd64.zip' -OutFile "step-ca_windows_${StepVersion}_amd64.zip"
+    Invoke-WebRequest "https://dl.step.sm/gh-release/certificates/gh-release-header/v${StepVersion}/step-ca_windows_${StepVersion}_amd64.zip" -OutFile "step-ca_windows_${StepVersion}_amd64.zip"
     Expand-Archive -Path ".\step-ca_windows_${StepVersion}_amd64.zip" -DestinationPath .
-    Move-Item ".\step-ca_${StepVersion}\bin\step-ca.exe" "$StepPath\bin\step-ca.exe"
+    Move-Item ".\step-ca_${StepVersion}\step-ca.exe" "$StepPath\bin\step-ca.exe"
     Remove-Item .\step-ca_* -Recurse
 } -Session $VMSession
 
