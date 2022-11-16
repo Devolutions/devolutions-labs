@@ -2,6 +2,7 @@ Import-Module .\DevolutionsLabs.psm1 -Force
 
 $ErrorActionPreference = "Stop"
 
+$OSVersion = "2019"
 $VMName = "IT-TEMPLATE"
 $SwitchName = "NAT Switch"
 $UserName = "Administrator"
@@ -22,6 +23,7 @@ $Params = @{
     UserOrganization = "IT-HELP";
     ComputerName = $Name;
     AdministratorPassword = $Password;
+    OSVersion = $OSVersion;
     UILanguage = "en-US";
     UserLocale = "en-CA";
 }
@@ -33,7 +35,7 @@ New-DLabAnswerFile $AnswerFilePath @Params
 $AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
 New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
 
-New-DLabParentVM $VMName -SwitchName $SwitchName -Force
+New-DLabParentVM $VMName -SwitchName $SwitchName -OSVersion $OSVersion -Force
 
 Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
 
@@ -178,7 +180,7 @@ Invoke-Command -ScriptBlock {
     New-Item -ItemType Directory -Path "C:\tools" -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "C:\tools\bin" -ErrorAction SilentlyContinue | Out-Null
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
-    Invoke-WebRequest 'https://npcap.com/dist/npcap-1.60.exe' -OutFile "C:\tools\npcap-1.60.exe"
+    Invoke-WebRequest 'https://npcap.com/dist/npcap-1.71.exe' -OutFile "C:\tools\npcap-1.71.exe"
     Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "C:\tools\CCProxySetup.exe"
     Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "C:\tools\bepo-1.1rc2-full.exe"
 } -Session $VMSession
@@ -186,18 +188,19 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing Smallstep CA"
 
 Invoke-Command -ScriptBlock {
+    $StepVersion = "0.23.0"
     $StepPath = Join-Path $Env:ProgramData "step"
     New-Item -ItemType Directory -Path $StepPath -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "$StepPath\bin" -ErrorAction SilentlyContinue | Out-Null
     [Environment]::SetEnvironmentVariable("STEPPATH", $StepPath, "Machine")
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};$StepPath\bin", "Machine")
-    Invoke-WebRequest 'https://dl.step.sm/gh-release/cli/docs-cli-install/v0.19.0/step_windows_0.19.0_amd64.zip' -OutFile "step_windows_0.19.0_amd64.zip"
-    Expand-Archive -LiteralPath .\step_windows_0.19.0_amd64.zip -DestinationPath .
-    Move-Item ".\step_0.19.0\bin\step.exe" "$StepPath\bin\step.exe"
+    Invoke-WebRequest "https://dl.step.sm/gh-release/cli/gh-release-header/v${StepVersion}/step_windows_${StepVersion}_amd64.zip" -OutFile "step_windows_${StepVersion}_amd64.zip"
+    Expand-Archive -Path ".\step_windows_${StepVersion}_amd64.zip" -DestinationPath .
+    Move-Item ".\step_${StepVersion}\bin\step.exe" "$StepPath\bin\step.exe"
     Remove-Item .\step_* -Recurse
-    Invoke-WebRequest 'https://dl.step.sm/gh-release/certificates/gh-release-header/v0.19.0/step-ca_windows_0.19.0_amd64.zip' -OutFile "step-ca_windows_0.19.0_amd64.zip"
-    Expand-Archive -Path ".\step-ca_windows_0.19.0_amd64.zip" -DestinationPath .
-    Move-Item ".\step-ca_0.19.0\bin\step-ca.exe" "$StepPath\bin\step-ca.exe"
+    Invoke-WebRequest "https://dl.step.sm/gh-release/certificates/gh-release-header/v${StepVersion}/step-ca_windows_${StepVersion}_amd64.zip" -OutFile "step-ca_windows_${StepVersion}_amd64.zip"
+    Expand-Archive -Path ".\step-ca_windows_${StepVersion}_amd64.zip" -DestinationPath .
+    Move-Item ".\step-ca_${StepVersion}\step-ca.exe" "$StepPath\bin\step-ca.exe"
     Remove-Item .\step-ca_* -Recurse
 } -Session $VMSession
 
@@ -407,7 +410,7 @@ $ParentDisksPath = Get-DLabPath "IMGs"
 $ParentDiskFileName = $VMName, 'vhdx' -Join '.'
 $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
 
-$GoldenDiskFileName = "Windows Server 2019 Standard - $(Get-Date -Format FileDate).vhdx"
+$GoldenDiskFileName = "Windows Server $OSVersion Standard - $(Get-Date -Format FileDate).vhdx"
 $GoldenDiskPath = Join-Path $ParentDisksPath $GoldenDiskFileName
 
 Write-Host "Moving golden VHDX"

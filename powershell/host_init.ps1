@@ -77,7 +77,7 @@ function Invoke-HostInit {
     # To avoid logging in to the Visual Studio subscriber download portal inside the VM, one trick
     # is to start the download from another computer and then grab the short-lived download URL.
 
-    # en-us_windows_server_2019_updated_aug_2021_x64_dvd_a6431a28.iso
+    # en-us_windows_server_2019_x64_dvd_f9475476.iso
 
     # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 

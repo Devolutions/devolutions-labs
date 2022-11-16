@@ -76,7 +76,7 @@ You may need to reboot the host for the Hyper-V feature installation to complete
 
 ## Golden Image
 
-Download the latest Windows Server .iso file (en_windows_server_2019_updated_jun_2021_x64_dvd_a2a2f782.iso). This is the regular Windows Server ISO which is only available to those with the right Visual Studio (MSDN) subscription, not the evaluation ISO available publicly. Ask someone on your team for a download link (hint: the person maintaining these scripts). Copy the iso file to "C:\Hyper-V\ISOs", then create the golden virtual machine image:
+Download the latest Windows Server .iso file (en-us_windows_server_2019_x64_dvd_f9475476.iso). This is the regular Windows Server ISO which is only available to those with the right Visual Studio (MSDN) subscription, not the evaluation ISO available publicly. Ask someone on your team for a download link (hint: the person maintaining these scripts). Copy the iso file to "C:\Hyper-V\ISOs", then create the golden virtual machine image:
 
 ```powershell
 .\golden.ps1
@@ -111,34 +111,3 @@ Launch Remote Desktop Manager, then run the rdm_init.ps1 script to create and in
 ```
 
 You will need to restart Remote Desktop Manager after running the script to see the new data source in the list. This part usually doesn't work well, so if "IT-HELP-LAB" is missing from the list, simply create an SQLite data source of the same name using "%LocalAppData%\Devolutions\RemoteDesktopManager\IT-HELP-LAB.db" as database file.
-
-## Azure Lab Services
-
-Use this section to build the lab in Azure Lab Services, otherwise skip it.
-
-Azure Lab Services virtual machine base image:
-
- * Windows Server 2019 Datacenter
- * Windows 10 Enterprise, Version 20H2
- * Large (Nested virtualization) | 8 cores | 32GB RAM
-
-Change the default time zone:
-
-```powershell
-Set-TimeZone -Id 'Eastern Standard Time' -PassThru
-```
-
-Disable the server manager automatic start at logon:
-
-```powershell
-Get-ScheduledTask -TaskName ServerManager | Disable-ScheduledTask
-```
-
-Disable IE Enhanced Security Configuration:
-
-```powershell
-$AdminKey = "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}"
-$UserKey = "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}"
-Set-ItemProperty -Path $AdminKey -Name "IsInstalled" -Value 0
-Set-ItemProperty -Path $UserKey -Name "IsInstalled" -Value 0
-```

@@ -2,6 +2,7 @@
 
 Import-Module .\DevolutionsLabs.psm1 -Force
 
+$OSVersion = "2019"
 $LabPrefix = "IT-HELP"
 $LabDnsTld = ".ninja"
 $LabCompanyName = "IT Help Ninja"
