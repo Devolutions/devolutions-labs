@@ -5,7 +5,7 @@ $VMNumber = 6
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
-New-DLabVM $VMName -Password $LocalPassword -Force
+New-DLabVM $VMName -Password $LocalPassword -OSVersion $OSVersion -Force
 Start-DLabVM $VMName
 
 Wait-DLabVM $VMName 'Heartbeat' -Timeout 120 -UserName $LocalUserName -Password $LocalPassword

@@ -217,10 +217,10 @@ function New-DLabChildDisk
 	param(
         [Parameter(Mandatory=$true,Position=0)]
         [string] $Name,
+        [Parameter(Mandatory=$true,Position=1)]
+        [string] $ParentDiskPath,
         [switch] $Force
     )
-
-    $ParentDiskPath = Get-DLabParentDiskFilePath "Windows Server 2019 Standard"
 
     if (-Not (Test-Path $ParentDiskPath -PathType 'Leaf')) {
         throw "`"$ParentDiskPath`" cannot be found"
@@ -434,6 +434,8 @@ function New-DLabParentVM
         [string] $Name,
         [string] $Password,
         [string] $SwitchName,
+        [Parameter(Mandatory=$true)]
+        [string] $OSVersion,
         [UInt64] $DiskSize = 128GB,
         [switch] $Force
     )
@@ -447,7 +449,7 @@ function New-DLabParentVM
         }
     }
 
-    $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_2019").FullName
+    $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_${OSVersion}").FullName
 
     $ParentDisk = New-DLabParentDisk $Name -DiskSize $DiskSize -Force:$Force
 
@@ -484,6 +486,8 @@ function New-DLabVM
         [string] $Password,
         [Int64] $MemoryBytes = 4GB,
         [Int64] $ProcessorCount = 4,
+        [Parameter(Mandatory=$true)]
+        [string] $OSVersion,
         [switch] $Force
     )
 
@@ -496,7 +500,9 @@ function New-DLabVM
         }
     }
 
-    $ChildDisk = New-DLabChildDisk $Name -Force:$Force
+    $ParentDiskPath = Get-DLabParentDiskFilePath "Windows Server ${OSVersion} Standard"
+
+    $ChildDisk = New-DLabChildDisk $Name -ParentDiskPath $ParentDiskPath -Force:$Force
 
     $MountedDisk = Mount-VHD -Path $ChildDisk.Path -PassThru
 
@@ -513,6 +519,7 @@ function New-DLabVM
         UserOrganization = "IT-HELP";
         ComputerName = $Name;
         AdministratorPassword = $Password;
+        OSVersion = $OSVersion;
         UILanguage = "en-US";
         UserLocale = "en-CA";
     }
@@ -553,6 +560,7 @@ function New-DLabAnswerFile
         [string] $UserFullName,
         [string] $UserOrganization,
         [string] $AdministratorPassword,
+        [string] $OSVersion = "2019",
         [string] $UILanguage = "en-US",
         [string] $UserLocale = "en-US",
         [string] $TimeZone = "Eastern Standard Time"
@@ -579,6 +587,9 @@ function New-DLabAnswerFile
     if (-Not [string]::IsNullOrEmpty($UserOrganization)) {
         $component.UserData.Organization = $UserOrganization
     }
+
+    $OSImageName = "Windows Server $OSVersion SERVERSTANDARD"
+    $component.ImageInstall.OSImage.InstallFrom.MetaData.Value = $OSImageName
 
     $specialize = $answer.unattend.settings | Where-Object { $_.pass -Like 'specialize' }
 
