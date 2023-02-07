@@ -1,3 +1,6 @@
+#Requires -RunAsAdministrator
+#Requires -PSEdition Core
+
 . .\common.ps1
 
 $VMAlias = "DC"

@@ -1,40 +1,22 @@
+#Requires -RunAsAdministrator
+#Requires -PSEdition Core
+
 function Invoke-HostInit {
     param(
-        [switch] $Bootstrap,
-        [switch] $IncludeOptional
     )
 
-    if ($Bootstrap) {
-        Set-ExecutionPolicy Unrestricted -Force
-        Install-PackageProvider Nuget -Force
-        Install-Module -Name PowerShellGet -Force
-    }
-
-    if (-Not (Get-Command -Name choco -CommandType Application -ErrorAction SilentlyContinue)) {
-        iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-    }
-
-    if ($IncludeOptional) {
-        if (-Not (Get-Command -Name git -CommandType Application -ErrorAction SilentlyContinue)) {
-            choco install -y --no-progress git
-        }
-        choco install -y --no-progress vlc
-        choco install -y --no-progress gsudo
-        choco install -y --no-progress vscode
-        choco install -y --no-progress openssl
-        choco install -y --no-progress kdiff3
-        choco install -y --no-progress filezilla
-        choco install -y --no-progress wireshark
-        choco install -y --no-progress sysinternals
-        choco install -y --no-progress sublimetext3
-        choco install -y --no-progress notepadplusplus
-    }
+    $IsChocoPresent = [bool](Get-Command -Name choco -CommandType Application -ErrorAction SilentlyContinue)
+    $IsWingetPresent = [bool](Get-Command -Name winget -CommandType Application -ErrorAction SilentlyContinue)
 
     if (-Not (Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue)) {
-        choco install -y --no-progress 7zip
+        if ($IsWingetPresent) {
+            winget install 7zip.7zip
+        } elseif ($IsChocoPresent) {
+            choco install -y --no-progress 7zip
+        } else {
+            Write-Warning "7z.exe cannot be found or installed automatically"
+        }
     }
-
-    Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit -Value 0
 
     $RegPath = "HKLM:\Software\Policies\Mozilla\Firefox\Certificates"
     New-Item -Path $RegPath -Force | Out-Null
@@ -51,10 +33,6 @@ function Invoke-HostInit {
         Install-Module PsHosts -Scope AllUsers -Force
     }
 
-    if (-Not (Get-Command -Name pwsh -CommandType Application -ErrorAction SilentlyContinue)) {
-        &([ScriptBlock]::Create((irm "https://aka.ms/install-powershell.ps1"))) -UseMSI -Quiet
-    }
-
     if (-Not (Get-InstalledModule RemoteDesktopManager -ErrorAction SilentlyContinue)) {
         Install-Module RemoteDesktopManager -Scope AllUsers -Force
     }
@@ -69,15 +47,16 @@ function Invoke-HostInit {
     $HyperVPath = if (Test-Path Env:DLAB_HOME) { $Env:DLAB_HOME } else { "C:\Hyper-V" }
     New-Item -ItemType Directory -Path $HyperVPath -ErrorAction SilentlyContinue | Out-Null
 
-    @('ISOs','IMGs','VHDs','VFDs') | ForEach-Object {
+    @('ISOs','IMGs','VHDs') | ForEach-Object {
         New-Item -ItemType Directory -Path $(Join-Path $HyperVPath $_) -ErrorAction SilentlyContinue | Out-Null
     }
 
-    # Download Windows Server 2019 ISO with the latest Windows updates and place it in C:\Hyper-V\ISOs
+    # Download Windows Server 2022 ISO with the latest Windows updates and place it in C:\Hyper-V\ISOs
     # To avoid logging in to the Visual Studio subscriber download portal inside the VM, one trick
     # is to start the download from another computer and then grab the short-lived download URL.
 
-    # en-us_windows_server_2019_x64_dvd_f9475476.iso
+    # The .iso file name needs to include "windows_server_2022", like this:
+    # en-us_windows_server_2022_updated_jan_2023_x64_dvd_2897e63d.iso
 
     # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 

@@ -13,10 +13,12 @@ Install-PackageProvider Nuget -Force
 Install-Module -Name PowerShellGet -Force
 ```
 
-If you do not have the chocolatey package manager already, use the following code snippet to install it:
+If you do not have a package manager already (winget, choco), use the following code snippet to install one:
 
 ```powershell
-iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+if (-Not (Get-Command -Name winget -CommandType Application -ErrorAction SilentlyContinue)) {
+	iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+}
 ```
 
 You can now install Hyper-V including the management tools (very important!). Manually reboot once this is done:
@@ -32,12 +34,6 @@ $CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 if (-Not (Get-LocalGroupMember -Group "Hyper-V Administrators" -Member $CurrentUser -ErrorAction SilentlyContinue)) {
 	Add-LocalGroupMember -Group "Hyper-V Administrators" -Member @($CurrentUser)
 }
-```
-
-Disable the Windows console host QuickEdit mode that freezes terminal output when you click anywhere in it until you press Enter. While this feature simplifies copy/pasting in the old terminal, too many hours have been wasted by unsuspecting users waiting on a terminal that had stopped executing:
-
-```powershell
-Set-ItemProperty -Path "HKCU:\Console" -Name QuickEdit -Value 0
 ```
 
 While optional, it is highly recommended to use Windows Terminal instead of the old Windows console host. Install it quickly using chocolatey:
@@ -58,18 +54,18 @@ From this point forward, always use PowerShell 7, as Windows PowerShell compatib
 
 ## Host Initialization
 
-Open elevated Windows PowerShell prompt, and move to the "powershell" directory of this repository containing all the scripts.
+Open an elevated PowerShell prompt, and move to the "powershell" directory of this repository containing all the scripts.
+
+Make sure the script files are unblocked for execution if they've been downloaded from a browser (Mark-of-the-Web):
+
+```powershell
+Get-ChildItem . -Recurse | Unblock-File
+```
 
 Run the host_init.ps1 script to initialize the host environment:
 
 ```powershell
 .\host_init.ps1
-```
-
-By default, the host initialization script installs the bare minimum required for the lab, but it can be used to bootstrap a new environment with default PowerShell settings and optional tools that can be useful:
-
-```powershell
-.\host_init.ps1 -Bootstrap -IncludeOptional
 ```
 
 You may need to reboot the host for the Hyper-V feature installation to complete.
