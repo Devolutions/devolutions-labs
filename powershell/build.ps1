@@ -1,3 +1,6 @@
+#Requires -RunAsAdministrator
+#Requires -PSEdition Core
+
 . .\common.ps1
 
 Write-Host "Creating $LabPrefix lab..."

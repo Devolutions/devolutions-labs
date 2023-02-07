@@ -560,7 +560,8 @@ function New-DLabAnswerFile
         [string] $UserFullName,
         [string] $UserOrganization,
         [string] $AdministratorPassword,
-        [string] $OSVersion = "2019",
+        [Parameter(Mandatory=$true)]
+        [string] $OSVersion,
         [string] $UILanguage = "en-US",
         [string] $UserLocale = "en-US",
         [string] $TimeZone = "Eastern Standard Time"

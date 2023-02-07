@@ -1,8 +1,10 @@
-Import-Module .\DevolutionsLabs.psm1 -Force
+#Requires -RunAsAdministrator
+#Requires -PSEdition Core
+
+. .\common.ps1
 
 $ErrorActionPreference = "Stop"
 
-$OSVersion = "2019"
 $VMName = "IT-TEMPLATE"
 $SwitchName = "NAT Switch"
 $UserName = "Administrator"
@@ -171,6 +173,22 @@ Invoke-Command -ScriptBlock {
     Start-Process msiexec.exe -Wait -ArgumentList @("/i", "OpenSSL.msi", "/qn")
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\OpenSSL-Win64\bin", "Machine")
     Remove-Item "OpenSSL.msi"
+} -Session $VMSession
+
+Write-Host "Installing Windows Terminal"
+
+Invoke-Command -ScriptBlock {
+    choco install -y --no-progress vcredist140
+    choco install -y --no-progress cascadiamono
+    choco install -y --no-progress cascadiacode
+    $ProgressPreference = "SilentlyContinue"
+    $WtVersion = "1.16.10231.0"
+    $WtDownloadBase = "https://github.com/Devolutions/wt-distro/releases/download"
+    $WtDownloadUrl = "$WtDownloadBase/v${WtVersion}/WindowsTerminal-${WtVersion}-x64.msi"
+    Invoke-WebRequest -UseBasicParsing $WtDownloadUrl -OutFile "WindowsTerminal.msi"
+    Start-Process msiexec.exe -Wait -ArgumentList @("/i", "WindowsTerminal.msi", "/qn")
+    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\Devolutions\Windows Terminal", "Machine")
+    Remove-Item "WindowsTerminal.msi"
 } -Session $VMSession
 
 Write-Host "Downloading tools"
