@@ -100,7 +100,14 @@ Invoke-Command -ScriptBlock {
 
     $TaskTrigger = New-ScheduledTaskTrigger -AtStartup
 
-    Register-ScheduledTask -Action $TaskAction -Trigger $TaskTrigger -TaskName "Activation Watermark" -Description "Remove Windows Activation Watermark"
+    $Params = @{
+        Action = $TaskAction;
+        Trigger = $TaskTrigger;
+        User = "NT AUTHORITY\SYSTEM";
+        TaskName = "Activation Watermark";
+        Description = "Remove Windows Activation Watermark";
+    }
+    Register-ScheduledTask @Params
 } -Session $VMSession
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
