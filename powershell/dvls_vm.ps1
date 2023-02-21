@@ -48,6 +48,7 @@ Invoke-Command -ScriptBlock {
     @('Web-Server',
     'Web-Http-Errors',
     'Web-Http-Logging',
+    'Web-Http-Tracing',
     'Web-Static-Content',
     'Web-Default-Doc',
     'Web-Dir-Browsing',
@@ -70,9 +71,9 @@ Write-Host "Installing IIS ASP.NET Core Module (ANCM)"
 Invoke-Command -ScriptBlock {
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-6.0
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle?view=aspnetcore-6.0
-    $DotNetHostingFileName = "dotnet-hosting-6.0.11-win.exe"
-    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/db07eed5-297a-45b8-bea2-1e93c623a88c/6e5a8d3432e6213f071be3751ae53a08/$DotNetHostingFileName"
-    $DotNetHostingFileSHA512 = '95183f2a3a017954f5cc7b7146ad79eacea6e26869fb4e780f5bf305d47663d9de993211ad467d070122903d91e340d961445c5634495df9a073ed6e2f05d8d5'
+    $DotNetHostingFileName = "dotnet-hosting-6.0.13-win.exe"
+    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/0cb3c095-c4f4-4d55-929b-3b4888a7b5f1/4156664d6bfcb46b63916a8cd43f8305/$DotNetHostingFileName"
+    $DotNetHostingFileSHA512 = 'cab22b918fe7c0e1821ad4114aeec4030ae42d4709d61ac0da8d5998f377dcc8bd096653da5a78961615f5d1a133da4a64d29d2b015a6a3e849ced0a753baf60'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
     if ($DotNetHostingFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetHostingFileName`: $DotNetHostingFileSHA512" }
@@ -85,6 +86,13 @@ Write-Host "Installing IIS extensions"
 Invoke-Command -ScriptBlock {
     choco install -y urlrewrite
     choco install -y iis-arr --ignore-checksums
+} -Session $VMSession
+
+Write-Host "Increase http.sys UrlSegmentMaxLength"
+
+Invoke-Command -ScriptBlock {
+    # https://learn.microsoft.com/en-US/troubleshoot/developer/webapps/iis/iisadmin-service-inetinfo/httpsys-registry-windows
+    Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\HTTP\Parameters' -Name 'UrlSegmentMaxLength' -Value 8192 -Type DWORD
 } -Session $VMSession
 
 Write-Host "Changing IIS default rules"
@@ -154,8 +162,8 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2022.3.4.0"
-$GatewayVersion = "2022.3.1.0"
+$DvlsVersion = "2022.3.12.0"
+$GatewayVersion = "2023.1.0.0"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
 $DvlsAdminPassword = "dvls-admin123!"
