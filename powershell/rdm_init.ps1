@@ -1,6 +1,6 @@
 . .\common.ps1
 
-Import-Module RemoteDesktopManager -Force
+Import-Module Devolutions.PowerShell -Force
 
 $Refresh = $true
 $ErrorActionPreference = "Stop"

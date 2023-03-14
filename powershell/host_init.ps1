@@ -33,8 +33,12 @@ function Invoke-HostInit {
         Install-Module PsHosts -Scope AllUsers -Force
     }
 
-    if (-Not (Get-InstalledModule RemoteDesktopManager -ErrorAction SilentlyContinue)) {
-        Install-Module RemoteDesktopManager -Scope AllUsers -Force
+    if (Get-InstalledModule RemoteDesktopManager -ErrorAction SilentlyContinue) {
+        Uninstall-Module RemoteDesktopManager -AllVersions
+    }
+
+    if (-Not (Get-InstalledModule Devolutions.PowerShell -ErrorAction SilentlyContinue)) {
+        Install-Module Devolutions.PowerShell -Scope AllUsers -Force
     }
 
     # Enable WinRM client
