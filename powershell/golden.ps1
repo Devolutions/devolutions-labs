@@ -210,31 +210,58 @@ Invoke-Command -ScriptBlock {
     Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "C:\tools\bepo-1.1rc2-full.exe"
 } -Session $VMSession
 
-Write-Host "Installing Smallstep CA"
+Write-Host "Installing Nirsoft tools"
 
 Invoke-Command -ScriptBlock {
-    $StepVersion = "0.23.0"
-    $StepPath = Join-Path $Env:ProgramData "step"
-    New-Item -ItemType Directory -Path $StepPath -ErrorAction SilentlyContinue | Out-Null
-    New-Item -ItemType Directory -Path "$StepPath\bin" -ErrorAction SilentlyContinue | Out-Null
-    [Environment]::SetEnvironmentVariable("STEPPATH", $StepPath, "Machine")
-    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};$StepPath\bin", "Machine")
-    Invoke-WebRequest "https://dl.step.sm/gh-release/cli/gh-release-header/v${StepVersion}/step_windows_${StepVersion}_amd64.zip" -OutFile "step_windows_${StepVersion}_amd64.zip"
-    Expand-Archive -Path ".\step_windows_${StepVersion}_amd64.zip" -DestinationPath .
-    Move-Item ".\step_${StepVersion}\bin\step.exe" "$StepPath\bin\step.exe"
-    Remove-Item .\step_* -Recurse
-    Invoke-WebRequest "https://dl.step.sm/gh-release/certificates/gh-release-header/v${StepVersion}/step-ca_windows_${StepVersion}_amd64.zip" -OutFile "step-ca_windows_${StepVersion}_amd64.zip"
-    Expand-Archive -Path ".\step-ca_windows_${StepVersion}_amd64.zip" -DestinationPath .
-    Move-Item ".\step-ca_${StepVersion}\step-ca.exe" "$StepPath\bin\step-ca.exe"
-    Remove-Item .\step-ca_* -Recurse
+    $ProgressPreference = "SilentlyContinue"
+    Set-Location "C:\tools"
+    # https://www.nirsoft.net/utils/regscanner.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/regscanner_setup.exe' -OutFile "regscanner_setup.exe"
+    Start-Process -FilePath ".\regscanner_setup.exe" -ArgumentList @('/S') -Wait -NoNewWindow
+    Remove-Item ".\regscanner_setup.exe"
+    # https://www.nirsoft.net/utils/full_event_log_view.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/fulleventlogview-x64.zip' -OutFile "fulleventlogview-x64.zip"
+    Expand-Archive -Path ".\fulleventlogview-x64.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\fulleventlogview-x64.zip"
+    # https://www.nirsoft.net/utils/gui_prop_view.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/guipropview-x64.zip' -OutFile "guipropview-x64.zip"
+    Expand-Archive -Path ".\guipropview-x64.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\guipropview-x64.zip"
+    # https://www.nirsoft.net/utils/dns_query_sniffer.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/dnsquerysniffer-x64.zip' -OutFile "dnsquerysniffer-x64.zip"
+    Expand-Archive -Path ".\dnsquerysniffer-x64.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\dnsquerysniffer-x64.zip"
+    # https://www.nirsoft.net/utils/dns_lookup_view.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/dnslookupview.zip' -OutFile "dnslookupview.zip"
+    Expand-Archive -Path ".\dnslookupview.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\dnslookupview.zip"
+    # https://www.nirsoft.net/utils/inside_clipboard.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/insideclipboard.zip' -OutFile "insideclipboard.zip"
+    Expand-Archive -Path ".\insideclipboard.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\insideclipboard.zip"
+    # https://www.nirsoft.net/utils/file_activity_watch.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/fileactivitywatch-x64.zip' -OutFile "fileactivitywatch-x64.zip"
+    Expand-Archive -Path ".\fileactivitywatch-x64.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\fileactivitywatch-x64.zip"
+    # https://www.nirsoft.net/utils/registry_changes_view.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/registrychangesview-x64.zip' -OutFile "registrychangesview-x64.zip"
+    Expand-Archive -Path ".\registrychangesview-x64.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\registrychangesview-x64.zip"
+    # https://www.nirsoft.net/utils/reg_file_from_application.html
+    Invoke-WebRequest 'https://www.nirsoft.net/utils/regfromapp-x64.zip' -OutFile "regfromapp-x64.zip"
+    Expand-Archive -Path ".\regfromapp-x64.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\regfromapp-x64.zip"
+    # cleanup binary output directory
+    Remove-Item "C:\tools\bin\*.txt"
+    Remove-Item "C:\tools\bin\*.chm"
 } -Session $VMSession
 
 Write-Host "Installing UltraVNC"
 
 Invoke-Command -ScriptBlock {
-    Invoke-WebRequest 'https://www.uvnc.eu/download/1381/UltraVNC_1_3_81_X64_Setup.exe' -OutFile "UltraVNC_1_3_81_X64_Setup.exe"
-    Start-Process .\UltraVNC_1_3_81_X64_Setup.exe -Wait -ArgumentList ("/VERYSILENT", "/NORESTART")
-    Remove-Item .\UltraVNC_1_3_81_X64_Setup.exe
+    Invoke-WebRequest 'https://www.uvnc.eu/download/1430/UltraVNC_1431_X64_Setup.exe' -OutFile "UltraVNC_Setup.exe"
+    Start-Process .\UltraVNC_Setup.exe -Wait -ArgumentList ("/VERYSILENT", "/NORESTART")
+    Remove-Item .\UltraVNC_Setup.exe
     
     $Params = @{
         Name = "uvnc_service";
@@ -293,6 +320,7 @@ Invoke-Command -ScriptBlock {
     Install-Module -Name PsHosts -Scope AllUsers
     Install-Module -Name Posh-ACME -Scope AllUsers
     Install-Module -Name PSWindowsUpdate -Scope AllUsers
+    Install-Module -Name PSDetour -Scope AllUsers -Force
 } -Session $VMSession
 
 Write-Host "Installing Remote Server Administration DNS tools"
