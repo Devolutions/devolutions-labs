@@ -71,9 +71,9 @@ Write-Host "Installing IIS ASP.NET Core Module (ANCM)"
 Invoke-Command -ScriptBlock {
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-6.0
     # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle?view=aspnetcore-6.0
-    $DotNetHostingFileName = "dotnet-hosting-6.0.13-win.exe"
-    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/0cb3c095-c4f4-4d55-929b-3b4888a7b5f1/4156664d6bfcb46b63916a8cd43f8305/$DotNetHostingFileName"
-    $DotNetHostingFileSHA512 = 'cab22b918fe7c0e1821ad4114aeec4030ae42d4709d61ac0da8d5998f377dcc8bd096653da5a78961615f5d1a133da4a64d29d2b015a6a3e849ced0a753baf60'
+    $DotNetHostingFileName = "dotnet-hosting-6.0.16-win.exe"
+    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/7ab0bc25-5b00-42c3-b7cc-bb8e08f05135/91528a790a28c1f0fe39845decf40e10/$DotNetHostingFileName"
+    $DotNetHostingFileSHA512 = '5fafc4170dce11f52d970d14e737f5b85491b5257bb7eb5b3c5e9bd275469ac2482185e3d3464a18cb522dfb7f582287451e2f24f86cdaaa3de017e1c8300711'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
     if ($DotNetHostingFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetHostingFileName`: $DotNetHostingFileSHA512" }
@@ -106,6 +106,15 @@ Invoke-Command -ScriptBlock {
 
     & "$Env:WinDir\system32\inetsrv\appcmd.exe" set config `
         -section:system.webServer/rewrite/globalRules -useOriginalURLEncoding:false /commit:apphost
+} -Session $VMSession
+
+Write-Host "Installing WebView2 Runtime"
+
+Invoke-Command -ScriptBlock {
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile 'MicrosoftEdgeWebview2Setup.exe'
+    Start-Process -FilePath '.\MicrosoftEdgeWebview2Setup.exe' -ArgumentList @('/silent', '/install') -Wait
+    Remove-Item 'MicrosoftEdgeWebview2Setup.exe' -Force | Out-Null
 } -Session $VMSession
 
 Write-Host "Installing SQL Server Express"
@@ -162,8 +171,8 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2023.1.1.0"
-$GatewayVersion = "2023.1.1.0"
+$DvlsVersion = "2023.1.8.0"
+$GatewayVersion = "2023.2.2.0"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
 $DvlsAdminPassword = "dvls-admin123!"
