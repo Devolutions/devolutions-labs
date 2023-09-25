@@ -24,7 +24,7 @@ if (-Not (Get-Command -Name winget -CommandType Application -ErrorAction Silentl
 You can now install Hyper-V including the management tools (very important!). Manually reboot once this is done:
 
 ```powershell
-Enable-WindowsOptionalFeature -Online -FeatureName @("Microsoft-Hyper-V") -All -NoRestart
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart
 ```
 
 In order to use Hyper-V from an unelevated shell, add yourself to the local Hyper-V Administrators group:
