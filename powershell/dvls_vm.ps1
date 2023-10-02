@@ -74,6 +74,7 @@ Invoke-Command -ScriptBlock {
     $DotNetHostingFileName = "dotnet-hosting-6.0.16-win.exe"
     $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/7ab0bc25-5b00-42c3-b7cc-bb8e08f05135/91528a790a28c1f0fe39845decf40e10/$DotNetHostingFileName"
     $DotNetHostingFileSHA512 = '5fafc4170dce11f52d970d14e737f5b85491b5257bb7eb5b3c5e9bd275469ac2482185e3d3464a18cb522dfb7f582287451e2f24f86cdaaa3de017e1c8300711'
+    $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
     if ($DotNetHostingFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetHostingFileName`: $DotNetHostingFileSHA512" }
@@ -84,8 +85,8 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing IIS extensions"
 
 Invoke-Command -ScriptBlock {
-    choco install -y urlrewrite
-    choco install -y iis-arr --ignore-checksums
+    choco install -y --no-progress urlrewrite
+    choco install -y --no-progress --ignore-checksums iis-arr
 } -Session $VMSession
 
 Write-Host "Increase http.sys UrlSegmentMaxLength"
@@ -121,7 +122,7 @@ Write-Host "Installing SQL Server Express"
 
 Invoke-Command -ScriptBlock {
     choco install -y --no-progress sql-server-express
-    choco install -y --no-progress sql-server-management-studio
+    #choco install -y --no-progress sql-server-management-studio
     Install-Module -Name SqlServer -Scope AllUsers -AllowClobber -Force
 } -Session $VMSession
 
@@ -171,12 +172,14 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2023.1.8.0"
-$GatewayVersion = "2023.2.2.0"
+$DvlsVersion = "2023.2.9.0"
+$GatewayVersion = "2023.2.3.0"
+$DvlsSiteName = "DVLS"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
 $DvlsAdminPassword = "dvls-admin123!"
 $DvlsAdminEmail = "admin@ad.it-help.ninja"
+$DvlsLicense = $licensing.DVLS
 
 $DvlsHostName = "dvls.$DomainName"
 $DvlsAccessUri = "https://$DvlsHostName"
@@ -187,7 +190,14 @@ Write-Host "Creating new DNS record for Devolutions Server"
 
 Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
     Install-WindowsFeature RSAT-DNS-Server
-    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+    $Params = @{
+        Name = $DnsName;
+        ZoneName = $DnsZoneName;
+        IPv4Address = $IPAddress;
+        ComputerName = $DnsServer;
+        AllowUpdateAny = $true;
+    }
+    Add-DnsServerResourceRecordA @Params
 } -Session $VMSession -ArgumentList @("dvls", $DomainName, $IPAddress, $DCHostName)
 
 Write-Host "Requesting new certificate for Devolutions Server"
@@ -199,7 +209,7 @@ Request-DLabCertificate $VMName -VMSession $VMSession `
 
 Write-Host "Creating Devolutions Server IIS site"
 
-Invoke-Command -ScriptBlock { Param($DvlsHostName, $DvlsPath, $CertificateFile, $CertificatePassword)
+Invoke-Command -ScriptBlock { Param($DvlsHostName, $DvlsSiteName, $DvlsPath, $CertificateFile, $CertificatePassword)
     $DvlsPort = 443;
     New-Item -Path $DvlsPath -ItemType 'Directory' -ErrorAction SilentlyContinue | Out-Null
     $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
@@ -213,7 +223,7 @@ Invoke-Command -ScriptBlock { Param($DvlsHostName, $DvlsPath, $CertificateFile, 
     $CertificateThumbprint = $Certificate.Thumbprint
     $BindingInformation = '*:' + $DvlsPort + ':' + $DvlsHostName
     $Params = @{
-        Name = "DVLS";
+        Name = $DvlsSiteName;
         Protocol = "https";
         SslFlag = "Sni";
         PhysicalPath = $DvlsPath;
@@ -222,7 +232,7 @@ Invoke-Command -ScriptBlock { Param($DvlsHostName, $DvlsPath, $CertificateFile, 
         CertificateThumbprint = $CertificateThumbprint;
     }
     New-IISSite @Params
-} -Session $VMSession -ArgumentList @($DvlsHostName, $DvlsPath, $CertificateFile, $CertificatePassword)
+} -Session $VMSession -ArgumentList @($DvlsHostName, $DvlsSiteName, $DvlsPath, $CertificateFile, $CertificatePassword)
 
 Write-Host "Installing Devolutions Console"
 
@@ -234,21 +244,24 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion)
     Start-Process -FilePath $DvlsConsoleExe -ArgumentList @('/qn') -Wait
 } -Session $VMSession -ArgumentList @($DvlsVersion)
 
-Write-Host "Install Devolutions Server"
+Write-Host "Installing Devolutions Server"
 
 Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
-    $DvlsPath, $DvlsAccessUri,
+    $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
-    $DvlsAdminUsername, $DvlsAdminPassword, $DvlsAdminEmail)
+    $DvlsAdminUsername, $DvlsAdminPassword,
+    $DvlsAdminEmail, $DvlsLicense)
 
     $ProgressPreference = 'SilentlyContinue'
     $DownloadBaseUrl = "https://cdn.devolutions.net/download"
 
+    Write-Host "Downloading Devolutions Server version $DvlsVersion"
     $DvlsWebAppZip = "$(Resolve-Path ~)\Documents\DVLS.${DvlsVersion}.zip"
     if (-Not $(Test-Path -Path $DvlsWebAppZip -PathType 'Leaf')) {
         Invoke-WebRequest "$DownloadBaseUrl/RDMS/DVLS.${DvlsVersion}.zip" -OutFile $DvlsWebAppZip
     }
 
+    Write-Host "Downloading Devolutions Gateway version $GatewayVersion"
     $GatewayMsi = "$(Resolve-Path ~)\Documents\DevolutionsGateway.msi"
     if (-Not $(Test-Path -Path $GatewayMsi -PathType 'Leaf')) {
         Invoke-WebRequest "$DownloadBaseUrl/DevolutionsGateway-x86_64-${GatewayVersion}.msi" -OutFile $GatewayMsi
@@ -264,27 +277,38 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
         "--adminUsername=$DvlsAdminUsername",
         "--adminPassword=$DvlsAdminPassword",
         "--adminEmail=$DvlsAdminEmail",
-        "--installZip=`"$DvlsWebAppZip`"",
-        "--dps-path=`"$DvlsPath`""
-        "--website=`"DVLS`"",
-        "--access-uri=`"$DvlsAccessUri`"",
-        "--serverName=`"Devolutions Server`"",
-        "--backupKeysPath=`"$BackupKeysPath`"",
+        "--installZip=$DvlsWebAppZip",
+        "--dps-path=$DvlsPath",
+        "--dps-website-name=$DvlsSiteName",
+        "--web-application-name=/",
+        "--access-uri=$DvlsAccessUri",
+        "--backupKeysPath=$BackupKeysPath",
         "--backupKeysPassword=$BackupKeysPassword",
         "--databaseHost=$SqlInstance",
-        "--databaseName=`"dvls`"",
+        "--databaseName=$DatabaseName",
         "--db-username=$SqlUsername",
         "--db-password=$SqlPassword",
         "--install-devolutions-gateway",
-        "--gateway-msi=`"$GatewayMsi`"",
+        "--gateway-msi=$GatewayMsi",
         "--disableEncryptConfig",
         "--disablePassword")
 
+    if ($DvlsAccessUri.StartsWith("http://")) {
+        $DvlsConsoleArgs += @("--disable-https")
+    }
+
+    if (-Not [string]::IsNullOrEmpty($DvlsLicense)) {
+        $DvlsConsoleArgs += @('--serial', $DvlsLicense)
+    }
+
     $DvlsConsoleCli = "${Env:ProgramFiles(x86)}\Devolutions\Devolutions Server Console\DPS.Console.CLI.exe"
+
+    Write-Host "& '$DvlsConsoleCli' $($DvlsConsoleArgs -Join ' ')"
 
     & $DvlsConsoleCli @DvlsConsoleArgs
 
 } -Session $VMSession -ArgumentList @($DvlsVersion, $GatewayVersion,
-    $DvlsPath, $DvlsAccessUri,
+    $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
-    $DvlsAdminUsername, $DvlsAdminPassword, $DvlsAdminEmail)
+    $DvlsAdminUsername, $DvlsAdminPassword,
+    $DvlsAdminEmail, $DvlsLicense)

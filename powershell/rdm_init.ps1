@@ -1,3 +1,8 @@
+param(
+    [Parameter(Position=0)]
+    [string] $DataSourceName
+)
+
 . .\common.ps1
 
 Import-Module Devolutions.PowerShell -Force
@@ -8,13 +13,16 @@ $ErrorActionPreference = "Stop"
 $LabName = "$LabPrefix-LAB"
 $VMAliases = @("DC", "DVLS", "GW", "WAC")
 
-$LabDataSourceName = $LabName
-if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabDataSourceName)) {
-    $DBFileName = ($LabDataSourceName -Replace ' ', '') + ".db"
+if ([string]::IsNullOrEmpty($DataSourceName)) {
+    $DataSourceName = $LabName
+}
+
+if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($DataSourceName)) {
+    $DBFileName = ($DataSourceName -Replace ' ', '') + ".db"
     $DBFilePath = "$Env:LocalAppData\Devolutions\RemoteDesktopManager\$DBFileName"
     Remove-Item -Path $DBFilePath -ErrorAction SilentlyContinue | Out-Null
     $Params = @{
-        Name = $LabDataSourceName;
+        Name = $DataSourceName;
         SQLite = $true;
         Database = $DBFilePath;
     }
@@ -22,7 +30,7 @@ if (-Not (Get-RDMDataSource | Select-Object -ExpandProperty Name).Contains($LabD
     Set-RDMDataSource -DataSource $DataSource
 }
 
-$LabDataSource = Get-RDMDataSource -Name $LabDataSourceName
+$LabDataSource = Get-RDMDataSource -Name $DataSourceName
 Set-RDMCurrentDataSource -DataSource $LabDataSource
 
 function Test-RDMGroup
@@ -120,6 +128,25 @@ Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
 $DomainAdminEntry = Get-RDMSession -GroupName $ADGroupName -Name $DomainAdminUPN
 $DomainAdminId = $DomainAdminEntry.ID
+
+# Protected User
+
+$ProtectedUserUPN = "ProtectedUser@$DomainDnsName"
+
+$Params = @{
+    Name = $ProtectedUserUPN
+    Type = "Credential";
+}
+
+$Session = New-RDMSession @Params
+$Session.Group = $ADGroupName
+$Session.MetaInformation.UPN = $ProtectedUserUPN
+Set-RDMSession -Session $Session -Refresh:$Refresh
+
+Set-RDMSessionUsername -ID $Session.ID $ProtectedUserName
+Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
+$Password = ConvertTo-SecureString $ProtectedUserPassword -AsPlainText -Force
+Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
 # RD Gateway
 

@@ -2,6 +2,8 @@
 
 Import-Module .\DevolutionsLabs.psm1 -Force
 
+$licensing = Get-Content -Path "$PSScriptRoot\licensing.json" -Raw | ConvertFrom-Json
+
 $OSVersion = "2022"
 $LabPrefix = "IT-HELP"
 $LabDnsTld = ".ninja"
