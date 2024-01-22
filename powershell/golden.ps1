@@ -185,17 +185,63 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing Windows Terminal"
 
 Invoke-Command -ScriptBlock {
-    choco install -y --no-progress vcredist140
-    choco install -y --no-progress cascadiamono
-    choco install -y --no-progress cascadiacode
     $ProgressPreference = "SilentlyContinue"
-    $WtVersion = "1.16.10231.0"
+    $WtVersion = "1.18.2822.0"
     $WtDownloadBase = "https://github.com/Devolutions/wt-distro/releases/download"
     $WtDownloadUrl = "$WtDownloadBase/v${WtVersion}/WindowsTerminal-${WtVersion}-x64.msi"
     Invoke-WebRequest -UseBasicParsing $WtDownloadUrl -OutFile "WindowsTerminal.msi"
     Start-Process msiexec.exe -Wait -ArgumentList @("/i", "WindowsTerminal.msi", "/qn")
-    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\Devolutions\Windows Terminal", "Machine")
     Remove-Item "WindowsTerminal.msi"
+} -Session $VMSession
+
+Write-Host "Set _NT_SYMBOL_PATH, fix DbgHelp DLLs"
+
+Invoke-Command -ScriptBlock {
+    $ProgressPreference = "SilentlyContinue"
+    New-Item -ItemType Directory -Path "C:\symbols" -ErrorAction SilentlyContinue | Out-Null
+    [Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*https://msdl.microsoft.com/download/symbols", "Machine")
+
+    $DbgHelpDir = "c:\symbols\DbgHelp"
+    New-Item -ItemType Directory -Path $DbgHelpDir -ErrorAction SilentlyContinue | Out-Null
+    
+    $NativeDir = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { "arm64" } else { "amd64" }
+    $Packages = @{
+        "Microsoft.Debugging.Platform.DbgEng" = "content/$NativeDir/dbghelp.dll";
+        "Microsoft.Debugging.Platform.SrcSrv" = "content/$NativeDir/srcsrv.dll";
+        "Microsoft.Debugging.Platform.SymSrv" = "content/$NativeDir/symsrv.dll"
+    }
+    foreach ($Package in $Packages.GetEnumerator()) {
+        $PackageName = $Package.Key
+        $FilePath = $Package.Value
+        $TempNupkgPath = "$Env:TEMP\$PackageName.zip"
+        $TempExtractPath = "$Env:TEMP\$PackageName"
+        $DownloadUrl = "https://www.nuget.org/api/v2/package/$PackageName"
+    
+        # Download raw .nupkg as a .zip file
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempNupkgPath
+        Expand-Archive -Path $TempNupkgPath -DestinationPath $TempExtractPath
+    
+        $FileToCopy = Join-Path $TempExtractPath $FilePath
+        if (Test-Path -Path $FileToCopy) {
+            Copy-Item -Path $FileToCopy -Destination $DbgHelpDir
+        }
+    
+        Remove-Item -Path $TempNupkgPath
+        Remove-Item -Path $TempExtractPath -Recurse
+    }
+
+    $DefaultUserReg = "HKLM\TempDefault"
+    $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
+    reg load $DefaultUserReg $NtuserDatPath
+    $HKDU = "Registry::$DefaultUserReg"
+    @('Process Monitor', 'Process Explorer') | ForEach-Object {
+        $RegPath = "$HKDU\Software\Sysinternals\$_"
+        New-Item -Path $RegPath -Force | Out-Null
+        Set-ItemProperty -Path $RegPath -Name "EulaAccepted" -Value 1 -Type DWORD
+        Set-ItemProperty -Path $RegPath -Name "DbgHelpPath" -Value "C:\symbols\DbgHelp\dbghelp.dll" -Type String
+    }
+    [GC]::Collect()
+    reg unload $DefaultUserReg
 } -Session $VMSession
 
 Write-Host "Downloading tools"
