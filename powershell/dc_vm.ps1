@@ -143,6 +143,22 @@ Invoke-Command -ScriptBlock { Param($CAHostName, $CACommonName)
     Get-ChildItem "$CertSrvPath\CertEnroll\*.crl" | ForEach-Object { certutil.exe -f -dspublish $_.FullName }
 } -Session $VMSession -ArgumentList @($CAHostName, $CACommonName)
 
+Write-Host "Force AD CS CRL renewal on system startup"
+
+Invoke-Command -ScriptBlock {
+    $TaskAction = New-ScheduledTaskAction -Execute "certutil.exe" -Argument "-crl"
+    $TaskTrigger = New-ScheduledTaskTrigger -AtStartup
+
+    $Params = @{
+        Action = $TaskAction;
+        Trigger = $TaskTrigger;
+        User = "NT AUTHORITY\SYSTEM";
+        TaskName = "Force AD CS CRL renewal";
+        Description = "Force AD CS CRL renewal";
+    }
+    Register-ScheduledTask @Params
+} -Session $VMSession
+
 Write-Host "Requesting RDP server certificate"
 
 Request-DLabRdpCertificate $VMName -VMSession $VMSession `

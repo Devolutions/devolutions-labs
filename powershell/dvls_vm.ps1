@@ -122,7 +122,7 @@ Write-Host "Installing SQL Server Express"
 
 Invoke-Command -ScriptBlock {
     choco install -y --no-progress sql-server-express
-    #choco install -y --no-progress sql-server-management-studio
+    choco install -y --no-progress sql-server-management-studio
     Install-Module -Name SqlServer -Scope AllUsers -AllowClobber -Force
 } -Session $VMSession
 
@@ -172,8 +172,8 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2023.2.9.0"
-$GatewayVersion = "2023.2.3.0"
+$DvlsVersion = "2023.3.13.0"
+$GatewayVersion = "2023.3.0.0"
 $DvlsSiteName = "DVLS"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
@@ -271,6 +271,9 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
     $BackupKeysPath = "$(Resolve-Path ~)\Documents\DvlsBackupKeys"
     New-Item -Path $BackupKeysPath -ItemType 'Directory' -ErrorAction SilentlyContinue | Out-Null
 
+    $PasswordFilePath = [Environment]::GetFolderPath('Desktop')
+    New-Item -Path $PasswordFilePath -ItemType 'Directory' -ErrorAction SilentlyContinue | Out-Null
+
     $DvlsConsoleArgs = @(
         "server", "install",
         "-v", "--acceptEula", "-q",
@@ -288,6 +291,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
         "--databaseName=$DatabaseName",
         "--db-username=$SqlUsername",
         "--db-password=$SqlPassword",
+        "--pwd-file-path=$PasswordFilePath",
         "--install-devolutions-gateway",
         "--gateway-msi=$GatewayMsi",
         "--disableEncryptConfig",
