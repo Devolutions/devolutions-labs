@@ -219,6 +219,16 @@ Invoke-Command -ScriptBlock { Param($ConnectionBroker, $CertificateFile, $Certif
     Publish-RDWebClientPackage -Type Production -Latest
 } -Session $VMSession -ArgumentList @($ConnectionBroker, $CertificateFile, $CertificatePassword)
 
+Write-Host "Configure Terminal Server Licensing"
+
+Invoke-Command -ScriptBlock {
+    $ts = Get-CimInstance -Namespace "Root/CIMV2/TerminalServices" -ClassName "Win32_TerminalServiceSetting"
+    Invoke-CimMethod -InputObject $ts -MethodName "ChangeMode" -Arguments @{LicensingType = 4} # per user licensing
+    Invoke-CimMethod -InputObject $ts -MethodName "SetSpecifiedLicenseServerList" -Arguments @{SpecifiedLSList = @($Env:ComputerName)}
+    $licenseServers = Invoke-CimMethod -InputObject $ts -MethodName "GetSpecifiedLicenseServerList"
+    Write-Host "Specified License Servers: $($licenseServers.SpecifiedLSList)"
+} -Session $VMSession
+
 Write-Host "Creating DNS record for Devolutions Gateway"
 
 $DnsName = "gateway"
