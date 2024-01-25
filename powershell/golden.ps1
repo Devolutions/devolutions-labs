@@ -353,6 +353,15 @@ Invoke-Command -ScriptBlock {
     New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
 } -Session $VMSession
 
+Write-Host "Disable Microsoft Edge first run experience"
+
+Invoke-Command -ScriptBlock {
+    $RegPath = "HKLM:\Software\Policies\Microsoft\Edge"
+    New-Item -Path $RegPath -Force | Out-Null
+    New-ItemProperty -Path $RegPath -Name "HideFirstRunExperience" -Value 1 -Force | Out-Null
+    New-ItemProperty -Path $RegPath -Name "NewTabPageLocation" -Value "https://www.google.com" -Force | Out-Null
+} -Session $VMSession
+
 Write-Host "Installing PowerShell secret management modules"
 
 Invoke-Command -ScriptBlock {
