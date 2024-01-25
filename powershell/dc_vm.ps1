@@ -172,6 +172,20 @@ Write-Host "Initializing VNC server"
 
 Initialize-DLabVncServer $VMName -VMSession $VMSession
 
+Write-Host "Create Smartcard Logon certificate template"
+
+Invoke-Command -ScriptBlock {
+    $Params = @{
+        BaseCertTypeName = "SmartcardLogon"
+        NewCertTypeName = "MySmartcardLogon"
+        NewCertTypeFriendlyName = "My Smartcard Logon"
+        EnrolleeSuppliesSubject = $true
+        AllowExportableKey = $true
+        EnableTemplate = $true
+    }
+    & "C:\tools\scripts\New-CertificateTemplate.ps1" @Params
+} -Session $VMSession
+
 Write-Host "Configuring LDAPS certificate"
 
 Invoke-Command -ScriptBlock {
