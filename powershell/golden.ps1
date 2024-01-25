@@ -112,6 +112,21 @@ Invoke-Command -ScriptBlock {
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
+Write-Host "Fix default borderless windows style"
+
+# https://www.deploymentresearch.com/fixing-borderless-windows-in-windows-server-2019-and-windows-server-2022/
+Invoke-Command -ScriptBlock {
+    $DefaultUserReg = "HKLM\TempDefault"
+    $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
+    reg load $DefaultUserReg $NtuserDatPath
+    $HKDU = "Registry::$DefaultUserReg"
+    $RegPath = "$HKDU\Control Panel\Desktop"
+    $RegValue = ([byte[]](0x90,0x32,0x07,0x80,0x10,0x00,0x00,0x00))
+    New-ItemProperty -Path $RegPath -Name "UserPreferencesMask" -Value $RegValue -PropertyType "Binary" -Force | Out-Null
+    [GC]::Collect()
+    reg unload $DefaultUserReg
+} -Session $VMSession
+
 Write-Host "Configuring initial PowerShell environment"
 
 Invoke-Command -ScriptBlock {
