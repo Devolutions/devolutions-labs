@@ -122,7 +122,7 @@ Write-Host "Installing SQL Server Express"
 
 Invoke-Command -ScriptBlock {
     choco install -y --no-progress sql-server-express
-    choco install -y --no-progress sql-server-management-studio
+    #choco install -y --no-progress sql-server-management-studio
     Install-Module -Name SqlServer -Scope AllUsers -AllowClobber -Force
 } -Session $VMSession
 
@@ -173,7 +173,6 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
 $DvlsVersion = "2023.3.13.0"
-$GatewayVersion = "2023.3.0.0"
 $DvlsSiteName = "DVLS"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
@@ -244,28 +243,19 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion)
     Start-Process -FilePath $DvlsConsoleExe -ArgumentList @('/qn') -Wait
 } -Session $VMSession -ArgumentList @($DvlsVersion)
 
+Write-Host "Installing Devolutions PowerShell module"
+
+Invoke-Command -ScriptBlock { Param($DvlsVersion)
+    Install-Module -Name Devolutions.PowerShell -Scope AllUsers -Force
+} -Session $VMSession -ArgumentList @($DvlsVersion)
+
 Write-Host "Installing Devolutions Server"
 
-Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
+Invoke-Command -ScriptBlock { Param(
     $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
     $DvlsAdminEmail, $DvlsLicense)
-
-    $ProgressPreference = 'SilentlyContinue'
-    $DownloadBaseUrl = "https://cdn.devolutions.net/download"
-
-    Write-Host "Downloading Devolutions Server version $DvlsVersion"
-    $DvlsWebAppZip = "$(Resolve-Path ~)\Documents\DVLS.${DvlsVersion}.zip"
-    if (-Not $(Test-Path -Path $DvlsWebAppZip -PathType 'Leaf')) {
-        Invoke-WebRequest "$DownloadBaseUrl/RDMS/DVLS.${DvlsVersion}.zip" -OutFile $DvlsWebAppZip
-    }
-
-    Write-Host "Downloading Devolutions Gateway version $GatewayVersion"
-    $GatewayMsi = "$(Resolve-Path ~)\Documents\DevolutionsGateway.msi"
-    if (-Not $(Test-Path -Path $GatewayMsi -PathType 'Leaf')) {
-        Invoke-WebRequest "$DownloadBaseUrl/DevolutionsGateway-x86_64-${GatewayVersion}.msi" -OutFile $GatewayMsi
-    }
 
     $BackupKeysPassword = "DvlsBackupKeys123!"
     $BackupKeysPath = "$(Resolve-Path ~)\Documents\DvlsBackupKeys"
@@ -280,7 +270,6 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
         "--adminUsername=$DvlsAdminUsername",
         "--adminPassword=$DvlsAdminPassword",
         "--adminEmail=$DvlsAdminEmail",
-        "--installZip=$DvlsWebAppZip",
         "--dps-path=$DvlsPath",
         "--dps-website-name=$DvlsSiteName",
         "--web-application-name=/",
@@ -293,16 +282,11 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
         "--db-password=$SqlPassword",
         "--pwd-file-path=$PasswordFilePath",
         "--install-devolutions-gateway",
-        "--gateway-msi=$GatewayMsi",
         "--disableEncryptConfig",
         "--disablePassword")
 
     if ($DvlsAccessUri.StartsWith("http://")) {
         $DvlsConsoleArgs += @("--disable-https")
-    }
-
-    if (-Not [string]::IsNullOrEmpty($DvlsLicense)) {
-        $DvlsConsoleArgs += @('--serial', $DvlsLicense)
     }
 
     $DvlsConsoleCli = "${Env:ProgramFiles(x86)}\Devolutions\Devolutions Server Console\DPS.Console.CLI.exe"
@@ -311,7 +295,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
 
     & $DvlsConsoleCli @DvlsConsoleArgs
 
-} -Session $VMSession -ArgumentList @($DvlsVersion, $GatewayVersion,
+} -Session $VMSession -ArgumentList @(
     $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
