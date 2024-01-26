@@ -157,6 +157,7 @@ if ($InstallChocolateyPackages) {
             'vlc',
             '7zip',
             'gsudo',
+            'ripgrep',
             'nssm',
             'firefox',
             'microsoft-edge',
@@ -209,7 +210,7 @@ Invoke-Command -ScriptBlock {
     Remove-Item "WindowsTerminal.msi"
 } -Session $VMSession
 
-Write-Host "Set _NT_SYMBOL_PATH, fix DbgHelp DLLs"
+Write-Host "Fixing DbgHelp DLLs and _NT_SYMBOL_PATH"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -256,25 +257,70 @@ Invoke-Command -ScriptBlock {
         Set-ItemProperty -Path $RegPath -Name "DbgHelpPath" -Value "C:\symbols\DbgHelp\dbghelp.dll" -Type String
     }
     [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-Host "Downloading tools"
+Write-Host "Accepting EULA on sysinternals tools"
+
+Invoke-Command -ScriptBlock {
+    $DefaultUserReg = "HKLM\TempDefault"
+    $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
+    reg load $DefaultUserReg $NtuserDatPath
+    $HKDU = "Registry::$DefaultUserReg"
+    $ToolNames = @(
+        "AccessChk", "AccessEnum", "Active Directory Explorer", "ADInsight", "Autologon",
+        "Autoruns", "BGInfo", "CacheSet", "ClockRes", "Contig", "Coreinfo", "CPUSTRES",
+        "Ctrl2cap", "DbgView", "Desktops", "Disk2Vhd", "Diskmon", "DiskView", "EFSDump",
+        "Handle", "Hex2Dec", "Junction", "LdmDump", "ListDLLs", "LiveKd", "LoadOrder",
+        "LogonSessions", "Movefile", "NotMyFault", "NTFSInfo", "PendMove", "Portmon",
+        "ProcDump", "Process Explorer", "Process Monitor", "PsExec", "PsFile", "PsGetSid",
+        "PsInfo", "PsKill", "PsList", "PsLoggedon", "PsLoglist", "PsPasswd", "PsPing",
+        "PsService", "PsShutdown", "PsSuspend", "RamMap", "RegDelNull", "Regjump",
+        "Regsize", "SDelete", "Share Enum", "ShareEnum", "ShellRunas", "sigcheck",
+        "Streams", "Strings", "Sync", "Sysmon", "TcpView", "VMMap", "VolumeID", "Whois",
+        "WinObj", "ZoomIt"
+    )
+    $ToolNames | ForEach-Object {
+        $RegPath = "$HKDU\Software\Sysinternals\$_"
+        New-Item -Path $RegPath -Force | Out-Null
+        Set-ItemProperty -Path $RegPath -Name "EulaAccepted" -Value 1 -Type DWORD
+    }
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    reg unload $DefaultUserReg
+} -Session $VMSession
+
+Write-Host "Downloading tool installers"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
     New-Item -ItemType Directory -Path "C:\tools" -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "C:\tools\bin" -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "C:\tools\scripts" -ErrorAction SilentlyContinue | Out-Null
+    New-Item -ItemType Directory -Path "C:\tools\installers" -ErrorAction SilentlyContinue | Out-Null
     [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
-    Invoke-WebRequest 'https://npcap.com/dist/npcap-1.71.exe' -OutFile "C:\tools\npcap-1.71.exe"
-    Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "C:\tools\CCProxySetup.exe"
-    Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "C:\tools\bepo-1.1rc2-full.exe"
+    Set-Location "C:\tools\installers"
+    Invoke-WebRequest 'https://npcap.com/dist/npcap-1.78.exe' -OutFile "npcap-1.78.exe"
+    Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "CCProxySetup.exe"
+    Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "bepo-1.1rc2-full.exe"
+    Invoke-WebRequest "https://assets.dataflare.app/release/windows/x86_64/Dataflare-Setup.exe" -OutFile "Dataflare-Setup.exe"
 } -Session $VMSession
 
-Write-Host "Copy PowerShell helper scripts"
+Write-Host "Copying PowerShell helper scripts"
 
 Copy-Item -Path "$PSScriptRoot\scripts\*" -Destination "C:\tools\scripts" -ToSession $VMSession -Recurse -Force
+
+Write-Host "Installing WinSpy"
+
+Invoke-Command -ScriptBlock {
+    $ProgressPreference = "SilentlyContinue"
+    # https://www.catch22.net/projects/winspy/
+    Invoke-WebRequest "https://github.com/strobejb/winspy/releases/download/v1.8.4/WinSpy_Release_x64.zip" -OutFile "WinSpy_Release.zip"
+    Expand-Archive -Path ".\WinSpy_Release.zip" -DestinationPath ".\WinSpy_Release" -Force
+    Copy-Item ".\WinSpy_Release\winspy.exe" "C:\tools\bin" -Force
+    Remove-Item ".\WinSpy_Release*" -Recurse -Force
+} -Session $VMSession
 
 Write-Host "Installing Nirsoft tools"
 
