@@ -153,7 +153,7 @@ Invoke-Command -ScriptBlock {
 if ($InstallChocolateyPackages) {
     Invoke-Command -ScriptBlock {
         $Packages = @(
-            'git',
+            'git.install',
             'vlc',
             '7zip',
             'gsudo',
