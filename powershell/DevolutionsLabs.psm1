@@ -727,12 +727,22 @@ function New-DLabVMSession
         [string] $VMName,
         [string] $UserName = "Administrator",
         [string] $DomainName = ".\",
-        [string] $Password
+        [string] $Password,
+        [string] $ConfigurationName
     )
 
     $Credential = Get-DLabCredential -UserName $UserName -DomainName $DomainName -Password $Password
 
-    New-PSSession -VMName $VMName -Credential $Credential
+    $Params = @{
+        VMName = $VMName
+        Credential = $Credential
+    }
+
+    if (-Not [string]::IsNullOrEmpty($ConfigurationName)) {
+        $Params.ConfigurationName = $ConfigurationName
+    }
+
+    New-PSSession @Params
 }
 
 function Set-DLabVMNetAdapter

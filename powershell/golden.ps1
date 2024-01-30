@@ -444,6 +444,12 @@ Invoke-Command -ScriptBlock {
     Install-Module -Name PSDetour -Scope AllUsers -Force
 } -Session $VMSession
 
+Write-Host "Installing Devolutions.PowerShell module"
+
+Invoke-Command -ScriptBlock {
+    Install-Module -Name Devolutions.PowerShell -Scope AllUsers
+} -Session $VMSession
+
 Write-Host "Installing Remote Server Administration DNS tools"
 
 Invoke-Command -ScriptBlock {
@@ -462,7 +468,7 @@ Write-Host "Installing PowerShell 7"
 Invoke-Command -ScriptBlock {
     [Environment]::SetEnvironmentVariable("POWERSHELL_UPDATECHECK", "0", "Machine")
     [Environment]::SetEnvironmentVariable("POWERSHELL_TELEMETRY_OPTOUT", "1", "Machine")
-    iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
+    iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
 } -Session $VMSession
 
 Write-Host "Rebooting VM"
