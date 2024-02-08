@@ -77,9 +77,6 @@ Invoke-Command -ScriptBlock {
 
 Write-Host "Create ProtectedUser test account in Protected Users group"
 
-$ProtectedUserName = "ProtectedUser"
-$ProtectedUserPassword = "Protected123!"
-
 Invoke-Command -ScriptBlock { Param($ProtectedUserName, $ProtectedUserPassword)
     $SafeProtectedUserPassword = ConvertTo-SecureString $ProtectedUserPassword -AsPlainText -Force
     $DomainDnsName = $Env:UserDnsDomain.ToLower()

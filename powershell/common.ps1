@@ -13,6 +13,9 @@ $LabName = $LabPrefix.ToLower() + $LabDnsTld
 $LocalUserName = "Administrator"
 $LocalPassword = "Local123!"
 
+$ProtectedUserName = "ProtectedUser"
+$ProtectedUserPassword = "Protected123!"
+
 $WanSwitchName = "NAT Switch"
 $LanSwitchName = "LAN Switch"
 $SwitchName = $LanSwitchName
