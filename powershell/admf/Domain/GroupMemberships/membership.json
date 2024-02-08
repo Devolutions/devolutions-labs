@@ -18,6 +18,12 @@
         "Group": "Management"
     },
     {
+        "Name": "Management",
+        "Domain": "%DomainName%",
+        "ItemType": "Group",
+        "Group": "RDM Users"
+    },
+    {
         "Name": "lgriffin",
         "Domain": "%DomainName%",
         "ItemType": "User",
@@ -46,6 +52,12 @@
         "Domain": "%DomainName%",
         "ItemType": "User",
         "Group": "Inside Sales"
+    },
+    {
+        "Name": "Inside Sales",
+        "Domain": "%DomainName%",
+        "ItemType": "Group",
+        "Group": "RDM Users"
     },
     {
         "Name": "kfoster",
