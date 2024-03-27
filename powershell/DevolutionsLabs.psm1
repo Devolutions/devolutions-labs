@@ -252,6 +252,18 @@ function Test-DLabVM
     [bool]$(Get-VM $Name -ErrorAction SilentlyContinue)
 }
 
+function Find-7ZipExe {
+    $7ZipExe = Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty Source
+    if (-Not $7ZipExe) {
+        $7ZipExe = @(
+            "${Env:ProgramFiles}\7-Zip\7z.exe",
+            "${Env:ProgramFiles(x86)}\7-Zip\7z.exe"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+    $7ZipExe
+}
+
 function Expand-AlpineOverlay
 {
     [CmdletBinding()]
@@ -271,7 +283,9 @@ function Expand-AlpineOverlay
         }
     }
 
-    cmd.exe /c "7z.exe x $InputFile -so | 7z x -si -ttar -o`"$Destination`""
+    $7ZipExe = Find-7ZipExe
+
+    cmd.exe /c "$7ZipExe x $InputFile -so | $7ZipExe x -si -ttar -o`"$Destination`""
 
     Push-Location
     Set-Location $Destination
@@ -325,7 +339,9 @@ function Compress-AlpineOverlay
 
     $TarFileName = $Destination.TrimEnd(".gz") | Split-Path -Leaf
 
-    cmd.exe /c "7z a -ttar -snl -so $TarFileName `"$InputPath/*`" | 7z a -si $Destination"
+    $7ZipExe = Find-7ZipExe
+
+    cmd.exe /c "$7ZipExe a -ttar -snl -so $TarFileName `"$InputPath/*`" | $7ZipExe a -si $Destination"
 }
 
 function New-DLabRouterVM

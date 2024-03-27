@@ -8,7 +8,16 @@ function Invoke-HostInit {
     $IsChocoPresent = [bool](Get-Command -Name choco -CommandType Application -ErrorAction SilentlyContinue)
     $IsWingetPresent = [bool](Get-Command -Name winget -CommandType Application -ErrorAction SilentlyContinue)
 
-    if (-Not (Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue)) {
+    $7ZipExe = Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty Source
+    if (-Not $7ZipExe) {
+        $7ZipExe = @(
+            "${Env:ProgramFiles}\7-Zip\7z.exe",
+            "${Env:ProgramFiles(x86)}\7-Zip\7z.exe"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+
+    if (-Not $7ZipExe) {
         if ($IsWingetPresent) {
             winget install 7zip.7zip
         } elseif ($IsChocoPresent) {
