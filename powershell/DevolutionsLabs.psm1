@@ -285,7 +285,7 @@ function Expand-AlpineOverlay
 
     $7ZipExe = Find-7ZipExe
 
-    cmd.exe /c "$7ZipExe x $InputFile -so | $7ZipExe x -si -ttar -o`"$Destination`""
+    cmd.exe /c "`"$7ZipExe`" x $InputFile -so | `"$7ZipExe`" x -si -ttar -o`"$Destination`""
 
     Push-Location
     Set-Location $Destination
@@ -341,7 +341,7 @@ function Compress-AlpineOverlay
 
     $7ZipExe = Find-7ZipExe
 
-    cmd.exe /c "$7ZipExe a -ttar -snl -so $TarFileName `"$InputPath/*`" | $7ZipExe a -si $Destination"
+    cmd.exe /c "`"$7ZipExe`" a -ttar -snl -so $TarFileName `"$InputPath/*`" | `"$7ZipExe`" a -si $Destination"
 }
 
 function New-DLabRouterVM
