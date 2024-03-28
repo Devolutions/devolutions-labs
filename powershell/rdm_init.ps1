@@ -119,12 +119,10 @@ $Params = @{
 $Session = New-RDMSession @Params
 $Session.Group = $ADGroupName
 $Session.MetaInformation.UPN = $DomainAdminUPN
+$Session | Set-RDMSessionUsername -UserName "Administrator"
+$Session | Set-RDMSessionDomain -Domain $DomainDnsName
+$Session | Set-RDMSessionPassword -Password (ConvertTo-SecureString $DomainPassword -AsPlainText -Force)
 Set-RDMSession -Session $Session -Refresh:$Refresh
-
-Set-RDMSessionUsername -ID $Session.ID "Administrator"
-Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
-$Password = ConvertTo-SecureString $DomainPassword -AsPlainText -Force
-Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
 $DomainAdminEntry = Get-RDMSession -GroupName $ADGroupName -Name $DomainAdminUPN
 $DomainAdminId = $DomainAdminEntry.ID
@@ -141,12 +139,10 @@ $Params = @{
 $Session = New-RDMSession @Params
 $Session.Group = $ADGroupName
 $Session.MetaInformation.UPN = $ProtectedUserUPN
+$Session | Set-RDMSessionUsername -UserName $ProtectedUserName
+$Session | Set-RDMSessionDomain -Domain $DomainDnsName
+$Session | Set-RDMSessionPassword -Password (ConvertTo-SecureString $ProtectedUserPassword -AsPlainText -Force)
 Set-RDMSession -Session $Session -Refresh:$Refresh
-
-Set-RDMSessionUsername -ID $Session.ID $ProtectedUserName
-Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
-$Password = ConvertTo-SecureString $ProtectedUserPassword -AsPlainText -Force
-Set-RDMSessionPassword -ID $Session.ID -Password $Password
 
 # RD Gateway
 
@@ -444,11 +440,9 @@ if (Test-Path -Path "ADAccounts.json" -PathType 'Leaf') {
         $Session = New-RDMSession @Params
         $Session.Group = $ADGroupName
         $Session.MetaInformation.UPN = $AccountUPN
+        $Session | Set-RDMSessionUsername -UserName $Username
+        $Session | Set-RDMSessionDomain -Domain $DomainDnsName
+        $Session | Set-RDMSessionPassword -Password (ConvertTo-SecureString $Password -AsPlainText -Force)
         Set-RDMSession -Session $Session -Refresh:$Refresh
-
-        Set-RDMSessionUsername -ID $Session.ID "$Username"
-        Set-RDMSessionDomain -ID $Session.ID $DomainDnsName
-        $Password = ConvertTo-SecureString $Password -AsPlainText -Force
-        Set-RDMSessionPassword -ID $Session.ID -Password $Password
     }
 }
