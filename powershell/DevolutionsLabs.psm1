@@ -357,6 +357,7 @@ function New-DLabRouterVM
         [string] $LanSwitchName,
         [string] $NetworkInterfaces,
         [string[]] $NameServers = @('1.1.1.1','1.0.0.1'),
+        [string] $DnsMasqConf,
         [UInt64] $DiskSize = 1GB,
         [switch] $Force
     )
@@ -402,10 +403,18 @@ function New-DLabRouterVM
     Expand-AlpineOverlay $OverlayFile -Destination $TempPath -Force
 
     $ResolvConf = $($NameServers | ForEach-Object { "nameserver $_" } | Out-String).Trim()
-    Set-Content -Path $(Join-Path $TempPath "/etc/resolv.conf") -Value $ResolvConf
+    Set-Content -Path $(Join-Path $TempPath "/etc/resolv.conf") -Value $ResolvConf -Encoding Utf8NoBOM
 
     if (-Not [string]::IsNullOrEmpty($NetworkInterfaces)) {
-        Set-Content -Path $(Join-Path $TempPath "/etc/network/interfaces") -Value $NetworkInterfaces
+        Set-Content -Path $(Join-Path $TempPath "/etc/network/interfaces") -Value $NetworkInterfaces -Encoding Utf8NoBOM
+    }
+
+    if (-Not [string]::IsNullOrEmpty($DnsMasqConf)) {
+        $EtcDnsMasqConf = $(Join-Path $TempPath "/etc/dnsmasq.conf")
+        if (Test-Path $EtcDnsMasqConf) {
+            Move-Item $EtcDnsMasqConf $(Join-Path $TempPath "/etc/dnsmasq.conf.bak")
+        }
+        Set-Content -Path $EtcDnsMasqConf -Value $DnsMasqConf -Encoding Utf8NoBOM
     }
 
     Compress-AlpineOverlay $TempPath -Destination $OverlayFile -Force

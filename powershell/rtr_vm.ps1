@@ -22,10 +22,16 @@ iface eth1 inet static
         netmask 255.255.255.0
 "@
 
+$DnsMasqConf = @"
+interface=eth1
+dhcp-range=$DhcpRangeStart,$DhcpRangeEnd,255.255.255.0,12h
+"@
+
 New-DLabRouterVM $VMName `
     -WanSwitchName $WanSwitchName `
     -LanSwitchName $LanSwitchName `
     -NetworkInterfaces $NetworkInterfaces `
+    -DnsMasqConf $DnsMasqConf `
     -Force
 
 Start-DLabVM $VMName
