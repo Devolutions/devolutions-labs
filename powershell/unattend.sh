@@ -18,6 +18,10 @@ iptables -A FORWARD -i eth1 -j ACCEPT
 /etc/init.d/iptables save
 /etc/init.d/iptables restart
 
+# Install DHCP server
+apk add dnsmasq
+rc-update add dnsmasq default
+
 # Install common tools
 apk add nano
 apk add sudo
@@ -47,7 +51,7 @@ apk add --no-cache ca-certificates less \
 
 apk -X https://dl-cdn.alpinelinux.org/alpine/edge/main add --no-cache lttng-ust
 
-curl -L https://github.com/PowerShell/PowerShell/releases/download/v7.3.6/powershell-7.3.6-linux-alpine-x64.tar.gz -o /tmp/powershell.tar.gz
+curl -L https://github.com/PowerShell/PowerShell/releases/download/v7.3.12/powershell-7.3.12-linux-alpine-x64.tar.gz -o /tmp/powershell.tar.gz
 
 mkdir -p /opt/microsoft/powershell/7
 tar zxf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7
