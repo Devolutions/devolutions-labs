@@ -296,7 +296,6 @@ $VMAliases | ForEach-Object {
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.Host = $Params.Host
     $Session.PowerShell.RemoteConsoleConnectionMode = "VMName"
-    $Session.PowerShell.Run64BitsMode = $true
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
@@ -320,7 +319,6 @@ $VMAliases | ForEach-Object {
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.PowerShell.Host = $Params.Host
     $Session.PowerShell.RemoteConsoleConnectionMode = "ComputerName"
-    $Session.PowerShell.Run64BitsMode = $true
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
