@@ -254,7 +254,7 @@ function Test-DLabVM
 
 function Find-7ZipExe {
     $7ZipExe = Get-Command -Name 7z -CommandType Application -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty Source
+        Select-Object -ExpandProperty Source -First 1
     if (-Not $7ZipExe) {
         $7ZipExe = @(
             "${Env:ProgramFiles}\7-Zip\7z.exe",
