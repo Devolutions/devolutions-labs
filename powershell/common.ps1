@@ -1,10 +1,12 @@
 # common variable definitions
 
-Import-Module .\DevolutionsLabs.psm1 -Force
+if (Test-Path .\DevolutionsLabs.psm1) {
+    Import-Module .\DevolutionsLabs.psm1 -Force
+}
 
 $licensing = Get-Content -Path "$PSScriptRoot\licensing.json" -Raw | ConvertFrom-Json
 
-$OSVersion = "2022"
+$OSVersion = "2025"
 $LabPrefix = "IT-HELP"
 $LabDnsTld = ".ninja"
 $LabCompanyName = "IT Help Ninja"

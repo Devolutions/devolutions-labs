@@ -303,7 +303,6 @@ Invoke-Command -ScriptBlock {
     Set-Location "C:\tools\installers"
     Invoke-WebRequest 'https://npcap.com/dist/npcap-1.78.exe' -OutFile "npcap-1.78.exe"
     Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "CCProxySetup.exe"
-    Invoke-WebRequest 'https://download.tuxfamily.org/dvorak/windows/1.1rc2/bepo-1.1rc2-full.exe' -OutFile "bepo-1.1rc2-full.exe"
     Invoke-WebRequest "https://assets.dataflare.app/release/windows/x86_64/Dataflare-Setup.exe" -OutFile "Dataflare-Setup.exe"
 } -Session $VMSession
 

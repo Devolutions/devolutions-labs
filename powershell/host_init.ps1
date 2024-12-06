@@ -64,12 +64,12 @@ function Invoke-HostInit {
         New-Item -ItemType Directory -Path $(Join-Path $HyperVPath $_) -ErrorAction SilentlyContinue | Out-Null
     }
 
-    # Download Windows Server 2022 ISO with the latest Windows updates and place it in C:\Hyper-V\ISOs
+    # Download Windows Server 2025 ISO with the latest Windows updates and place it in C:\Hyper-V\ISOs
     # To avoid logging in to the Visual Studio subscriber download portal inside the VM, one trick
     # is to start the download from another computer and then grab the short-lived download URL.
 
-    # The .iso file name needs to include "windows_server_2022", like this:
-    # en-us_windows_server_2022_updated_jan_2023_x64_dvd_2897e63d.iso
+    # The .iso file name needs to include "windows_server_2025", like this:
+    # en-us_windows_server_2025_x64_dvd_b7ec10f3.iso
 
     # Download latest Alpine Linux "virtual" edition (https://www.alpinelinux.org/downloads/)
 
