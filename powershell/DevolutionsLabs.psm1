@@ -6,6 +6,16 @@ if ($IsWindows) {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 }
 
+function Write-DLabLog {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string] $Message
+    )
+
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    Write-Host "[$timestamp] $Message"
+}
+
 function Get-DLabIpAddress
 {
     [CmdletBinding()]
@@ -461,6 +471,7 @@ function New-DLabParentVM
         [string] $SwitchName,
         [Parameter(Mandatory=$true)]
         [string] $OSVersion,
+        [string] $IsoFilePath,
         [UInt64] $DiskSize = 128GB,
         [switch] $Force
     )
@@ -474,7 +485,9 @@ function New-DLabParentVM
         }
     }
 
-    $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_${OSVersion}").FullName
+    if ([string]::IsNullOrEmpty($IsoFilePath)) {
+        $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_${OSVersion}").FullName
+    }
 
     $ParentDisk = New-DLabParentDisk $Name -DiskSize $DiskSize -Force:$Force
 

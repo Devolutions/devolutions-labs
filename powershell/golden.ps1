@@ -1,19 +1,45 @@
 #Requires -RunAsAdministrator
 #Requires -PSEdition Core
 
-. .\common.ps1
+param(
+    [string] $VMName = "IT-TEMPLATE",
+    [string] $UserName = "Administrator",
+    [string] $Password = "lab123!",
+    [string] $OSVersion = $null,
+    [string] $SwitchName = "NAT Switch",
+    [string] $InputIsoPath = $null,
+    [string] $OutputVhdxPath = $null,
+    [bool] $InstallWindowsUpdates = $false,
+    [bool] $InstallChocolateyPackages = $true
+)
 
 $ErrorActionPreference = "Stop"
 
-$VMName = "IT-TEMPLATE"
-$SwitchName = "NAT Switch"
-$UserName = "Administrator"
-$Password = "lab123!"
+$OSVersionParam = $OSVersion
+$SwitchNameParam = $SwitchName
 
-$InstallWindowsUpdates = $true
-$InstallChocolateyPackages = $true
+# load common variables
+. .\common.ps1
 
-Write-Host "Creating golden image"
+if (-Not [string]::IsNullOrEmpty($OSVersionParam)) {
+    $OSVersion = $OSVersionParam
+}
+
+if (-Not [string]::IsNullOrEmpty($SwitchNameParam)) {
+    $SwitchName = $SwitchNameParam
+}
+
+Write-Host "Options:"
+Write-Host "`tOSVersion: $OSVersion"
+Write-Host "`tSwitchName: $SwitchName"
+Write-Host "`tVMName: $VMName"
+Write-Host "`tUserName: $UserName"
+Write-Host "`tPassword: $Password"
+Write-Host "`tInstallWindowsUpdates: $InstallWindowsUpdates"
+Write-Host "`tInstallChocolateyPackages: $InstallChocolateyPackages"
+Write-Host ""
+
+Write-DLabLog "Creating golden image"
 
 $AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
 Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
@@ -30,23 +56,35 @@ $Params = @{
     UserLocale = "en-CA";
 }
 
-Write-Host "Creating Windows answer file"
+Write-DLabLog "Creating Windows answer file"
 
 New-DLabAnswerFile $AnswerFilePath @Params
 
 $AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
 New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
 
-New-DLabParentVM $VMName -SwitchName $SwitchName -OSVersion $OSVersion -Force
+if (-Not [string]::IsNullOrEmpty($InputIsoPath)) {
+    $IsoFilePath = $InputIsoPath
+} else {
+    $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_${OSVersion}").FullName
+}
+
+if (-Not (Test-Path $IsoFilePath)) {
+    throw "ISO file not found: '$IsoFilePath'"
+} else {
+    Write-DLabLog "Using '$IsoFilePath' ISO file"
+}
+
+New-DLabParentVM $VMName -OSVersion $OSVersion -IsoFilePath $IsoFilePath -Force
 
 Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
 
-Write-Host "Starting golden VM"
+Write-DLabLog "Starting golden VM for Windows installation"
 
 Start-DLabVM $VMName
 Start-Sleep 5
 
-Write-Host "Waiting for VM to reboot"
+Write-DLabLog "Waiting for VM to reboot a first time during installation"
 
 Wait-DLabVM $VMName 'Reboot' -Timeout 600
 
@@ -56,33 +94,63 @@ Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
 Remove-Item -Path $AnswerIsoPath -Force -ErrorAction SilentlyContinue | Out-Null
 Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
 
-Write-Host "Waiting for VM to become ready"
+Write-DLabLog "Waiting for VM to become ready after Windows installation"
 
-Wait-DLabVM $VMName 'PSDirect' -Timeout 600 -UserName $UserName -Password $Password
+Wait-DLabVM $VMName 'PSDirect' -Timeout (45 * 60) -UserName $UserName -Password $Password
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
-Write-Host "Setting VM network adapter"
+Write-DLabLog "Shutting down VM post-installation"
+Stop-VM $VMName
+Wait-DLabVM $VMName 'Shutdown' -Timeout 120
 
-Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
-    -SwitchName $SwitchName -NetAdapterName "vEthernet (LAN)" `
-    -IPAddress "10.9.0.249" -DefaultGateway "10.9.0.1" `
-    -DnsServerAddress "1.1.1.1"
+Get-VMNetworkAdapter -VMName $VMName | Remove-VMNetworkAdapter
+Add-VMNetworkAdapter -VMName $VMName -SwitchName $SwitchName
 
-Write-Host "Increase WinRM default configuration values"
+Write-DLabLog "Starting VM to begin customization"
+
+Start-DLabVM $VMName
+Start-Sleep 5
+
+Wait-DLabVM $VMName 'PSDirect' -Timeout 360 -UserName $UserName -Password $Password
+$VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
+
+Write-DLabLog "Configuring VM network adapter"
+
+if ($SwitchName -eq "NAT Switch") {
+    Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
+        -SwitchName $SwitchName -NetAdapterName "vEthernet (LAN)" `
+        -IPAddress "10.9.0.249" -DefaultGateway "10.9.0.1" `
+        -DnsServerAddress "1.1.1.1"
+}
+
+Write-DLabLog "Testing Internet connectivity"
+
+$ConnectionTest = Invoke-Command -ScriptBlock {
+    1..10 | ForEach-Object {
+        Start-Sleep -Seconds 1;
+        Resolve-DnsName -Name "www.google.com" -Type 'A' -DnsOnly -QuickTimeout -ErrorAction SilentlyContinue
+    } | Where-Object { $_ -ne $null } | Select-Object -First 1
+} -Session $VMSession
+
+if (-Not $ConnectionTest) {
+    throw "virtual machine doesn't have Internet access - fail early"
+}
+
+Write-DLabLog "Increase WinRM default configuration values"
 
 Invoke-Command -ScriptBlock {
     & 'winrm' 'set' 'winrm/config' '@{MaxTimeoutms=\"1800000\"}'
     & 'winrm' 'set' 'winrm/config/winrs' '@{MaxMemoryPerShellMB=\"800\"}'
 } -Session $VMSession
 
-Write-Host "Enabling TLS 1.2 for .NET Framework applications"
+Write-DLabLog "Enabling TLS 1.2 for .NET Framework applications"
 
 Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
     Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NetFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value '1' -Type DWORD
 } -Session $VMSession
 
-Write-Host "Disabling Server Manager automatic launch and Windows Admin Center pop-up"
+Write-DLabLog "Disabling Server Manager automatic launch and Windows Admin Center pop-up"
 
 Invoke-Command -ScriptBlock {
     $ServerManagerReg = "HKLM:\SOFTWARE\Microsoft\ServerManager"
@@ -90,7 +158,7 @@ Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path $ServerManagerReg -Name 'DoNotOpenServerManagerAtLogon' -Value '1' -Type DWORD
 } -Session $VMSession
 
-Write-Host "Disabling 'Activate Windows' watermark on desktop"
+Write-DLabLog "Disabling 'Activate Windows' watermark on desktop"
 
 Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform\Activation' -Name 'Manual' -Value '1' -Type DWORD
@@ -112,7 +180,7 @@ Invoke-Command -ScriptBlock {
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
-Write-Host "Fix default borderless windows style"
+Write-DLabLog "Fix default borderless windows style"
 
 # https://www.deploymentresearch.com/fixing-borderless-windows-in-windows-server-2019-and-windows-server-2022/
 Invoke-Command -ScriptBlock {
@@ -127,7 +195,41 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-Host "Configuring initial PowerShell environment"
+Write-DLabLog "Disable Bing Search in Start Menu"
+
+Invoke-Command -ScriptBlock {
+    $DefaultUserReg = "HKLM\TempDefault"
+    $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
+    reg load $DefaultUserReg $NtuserDatPath
+    $HKDU = "Registry::$DefaultUserReg"
+    $RegPath = "$HKDU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search"
+    New-Item -Path $RegPath -Force | Out-Null
+    Set-ItemProperty -Path $RegPath -Name "BingSearchEnabled" -Value 1 -Type DWORD
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    reg unload $DefaultUserReg
+} -Session $VMSession
+
+$CloudflareWarpCA = Get-ChildItem "cert:\LocalMachine\Root" |
+    Where-Object { $_.Subject -like "*Gateway CA - Cloudflare Managed G1*" }
+
+if ($CloudflareWarpCA) {
+    Write-DLabLog "Found Cloudflare WARP CA: $($CloudflareWarpCA.Subject)"
+
+    $TempCertPath = Join-Path $Env:TEMP "CloudflareWarpCA.cer"
+    Export-Certificate -Cert $CloudflareWarpCA -FilePath $TempCertPath -Force
+    Copy-Item -Path $TempCertPath -Destination "C:\Users\Public\" -ToSession $VMSession
+    Remove-Item $TempCertPath -Force | Out-Null
+
+    Write-DLabLog "Importing Cloudflare WARP CA..."
+    Invoke-Command -ScriptBlock {
+        $CertPath = "C:\Users\Public\CloudflareWarpCA.cer"
+        Import-Certificate -FilePath $CertPath -CertStoreLocation "cert:\LocalMachine\Root" | Out-Null
+        Remove-Item $CertPath -Force | Out-Null
+    } -Session $VMSession
+}
+
+Write-DLabLog "Configuring initial PowerShell environment"
 
 Invoke-Command -ScriptBlock {
     Set-ExecutionPolicy Unrestricted -Force
@@ -136,7 +238,7 @@ Invoke-Command -ScriptBlock {
     Set-PSRepository -Name "PSGallery" -InstallationPolicy "Trusted"
 } -Session $VMSession
 
-Write-Host "Installing chocolatey package manager"
+Write-DLabLog "Installing chocolatey package manager"
 
 Invoke-Command -ScriptBlock {
     iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
@@ -144,39 +246,40 @@ Invoke-Command -ScriptBlock {
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
-Write-Host "Installing .NET Framework 4.8"
+Write-DLabLog "Installing .NET Framework 4.8"
 
 Invoke-Command -ScriptBlock {
     choco install -y --no-progress netfx-4.8
 } -Session $VMSession
 
 if ($InstallChocolateyPackages) {
-    Invoke-Command -ScriptBlock {
-        $Packages = @(
-            'git.install',
-            'vlc',
-            '7zip',
-            'gsudo',
-            'ripgrep',
-            'nssm',
-            'firefox',
-            'microsoft-edge',
-            'vscode',
-            'kdiff3',
-            'filezilla',
-            'wireshark',
-            'sysinternals',
-            'sublimetext3',
-            'notepadplusplus')
+    $Packages = @(
+        'git.install',
+        'vlc',
+        '7zip',
+        'gsudo',
+        'ripgrep',
+        'nssm',
+        'firefox',
+        'microsoft-edge',
+        'vscode',
+        'kdiff3',
+        'filezilla',
+        'wireshark',
+        'sysinternals',
+        'sublimetext3',
+        'notepadplusplus'
+    )
 
-        foreach ($Package in $Packages) {
-            Write-Host "Installing $Package"
+    foreach ($Package in $Packages) {
+        Write-DLabLog "Installing $Package"
+        Invoke-Command -Session $VMSession -ScriptBlock { param($Package)
             choco install -y --no-progress $Package
-        }
-    } -Session $VMSession
+        } -ArgumentList @($Package)
+    }
 }
 
-Write-Host "Installing OpenSSL"
+Write-DLabLog "Installing OpenSSL"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -198,7 +301,7 @@ Invoke-Command -ScriptBlock {
     Remove-Item "OpenSSL.msi"
 } -Session $VMSession
 
-Write-Host "Installing Windows Terminal"
+Write-DLabLog "Installing Windows Terminal"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -210,7 +313,7 @@ Invoke-Command -ScriptBlock {
     Remove-Item "WindowsTerminal.msi"
 } -Session $VMSession
 
-Write-Host "Fixing DbgHelp DLLs and _NT_SYMBOL_PATH"
+Write-DLabLog "Fixing DbgHelp DLLs and _NT_SYMBOL_PATH"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -261,7 +364,7 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-Host "Accepting EULA on sysinternals tools"
+Write-DLabLog "Accepting EULA on sysinternals tools"
 
 Invoke-Command -ScriptBlock {
     $DefaultUserReg = "HKLM\TempDefault"
@@ -291,7 +394,7 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-Host "Downloading tool installers"
+Write-DLabLog "Downloading tool installers"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -306,11 +409,11 @@ Invoke-Command -ScriptBlock {
     Invoke-WebRequest "https://assets.dataflare.app/release/windows/x86_64/Dataflare-Setup.exe" -OutFile "Dataflare-Setup.exe"
 } -Session $VMSession
 
-Write-Host "Copying PowerShell helper scripts"
+Write-DLabLog "Copying PowerShell helper scripts"
 
 Copy-Item -Path "$PSScriptRoot\scripts\*" -Destination "C:\tools\scripts" -ToSession $VMSession -Recurse -Force
 
-Write-Host "Installing WinSpy"
+Write-DLabLog "Installing WinSpy"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -321,7 +424,7 @@ Invoke-Command -ScriptBlock {
     Remove-Item ".\WinSpy_Release*" -Recurse -Force
 } -Session $VMSession
 
-Write-Host "Installing Nirsoft tools"
+Write-DLabLog "Installing Nirsoft tools"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
@@ -367,7 +470,7 @@ Invoke-Command -ScriptBlock {
     Remove-Item "C:\tools\bin\*.chm"
 } -Session $VMSession
 
-Write-Host "Installing UltraVNC"
+Write-DLabLog "Installing UltraVNC"
 
 Invoke-Command -ScriptBlock {
     Invoke-WebRequest 'https://www.uvnc.eu/download/1430/UltraVNC_1431_X64_Setup.exe' -OutFile "UltraVNC_Setup.exe"
@@ -410,7 +513,7 @@ Invoke-Command -ScriptBlock {
     Start-Process -FilePath "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" -ArgumentList @('/i', '/o', $AclFile) -Wait -NoNewWindow
 } -Session $VMSession
 
-Write-Host "Configuring Firefox to trust system root CAs"
+Write-DLabLog "Configuring Firefox to trust system root CAs"
 
 Invoke-Command -ScriptBlock {
     $RegPath = "HKLM:\Software\Policies\Mozilla\Firefox\Certificates"
@@ -418,7 +521,7 @@ Invoke-Command -ScriptBlock {
     New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
 } -Session $VMSession
 
-Write-Host "Disable Microsoft Edge first run experience"
+Write-DLabLog "Disable Microsoft Edge first run experience"
 
 Invoke-Command -ScriptBlock {
     $RegPath = "HKLM:\Software\Policies\Microsoft\Edge"
@@ -427,42 +530,20 @@ Invoke-Command -ScriptBlock {
     New-ItemProperty -Path $RegPath -Name "NewTabPageLocation" -Value "https://www.google.com" -Force | Out-Null
 } -Session $VMSession
 
-Write-Host "Installing PowerShell secret management modules"
-
-Invoke-Command -ScriptBlock {
-    Install-Module Microsoft.PowerShell.SecretManagement -Scope AllUsers
-    Install-Module Microsoft.PowerShell.SecretStore -Scope AllUsers
-} -Session $VMSession
-
-Write-Host "Installing useful PowerShell modules"
-
-Invoke-Command -ScriptBlock {
-    Install-Module -Name PsHosts -Scope AllUsers
-    Install-Module -Name Posh-ACME -Scope AllUsers
-    Install-Module -Name PSWindowsUpdate -Scope AllUsers
-    Install-Module -Name PSDetour -Scope AllUsers -Force
-} -Session $VMSession
-
-Write-Host "Installing Devolutions.PowerShell module"
-
-Invoke-Command -ScriptBlock {
-    Install-Module -Name Devolutions.PowerShell -Scope AllUsers
-} -Session $VMSession
-
-Write-Host "Installing Remote Server Administration DNS tools"
+Write-DLabLog "Installing Remote Server Administration DNS tools"
 
 Invoke-Command -ScriptBlock {
     Install-WindowsFeature RSAT-DNS-Server
 } -Session $VMSession
 
-Write-Host "Enabling OpenSSH client and server features"
+Write-DLabLog "Enabling OpenSSH client and server features"
 
 Invoke-Command -ScriptBlock {
     Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
     Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 } -Session $VMSession
 
-Write-Host "Installing PowerShell 7"
+Write-DLabLog "Installing PowerShell 7"
 
 Invoke-Command -ScriptBlock {
     [Environment]::SetEnvironmentVariable("POWERSHELL_UPDATECHECK", "0", "Machine")
@@ -470,7 +551,7 @@ Invoke-Command -ScriptBlock {
     iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
 } -Session $VMSession
 
-Write-Host "Rebooting VM"
+Write-DLabLog "Rebooting VM"
 
 Invoke-Command -ScriptBlock {
     Restart-Computer -Force
@@ -481,7 +562,19 @@ Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $UserName -Password $Pass
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
-Write-Host "Enabling and starting sshd service"
+Write-DLabLog "Installing useful PowerShell modules"
+
+Invoke-Command -ScriptBlock {
+    Install-Module -Name PsHosts -Scope AllUsers
+    Install-Module -Name Posh-ACME -Scope AllUsers
+    Install-Module -Name PSWindowsUpdate -Scope AllUsers
+    Install-Module -Name PSDetour -Scope AllUsers -Force
+    Install-Module -Name AwakeCoding.DebugTools -Scope AllUsers -Force
+    Install-Module -Name Microsoft.PowerShell.SecretManagement -Scope AllUsers
+    Install-Module -Name Microsoft.PowerShell.SecretStore -Scope AllUsers
+} -Session $VMSession
+
+Write-DLabLog "Enabling and starting sshd service"
 
 Invoke-Command -ScriptBlock {
     Install-Module -Name Microsoft.PowerShell.RemotingTools -Scope AllUsers -Force
@@ -491,14 +584,14 @@ Invoke-Command -ScriptBlock {
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
-Write-Host "Enabling PowerShell Remoting over SSH"
+Write-DLabLog "Enabling PowerShell Remoting over SSH"
 
 Invoke-Command -ScriptBlock {
     & pwsh.exe -NoLogo -Command "Enable-SSHRemoting -Force"
     Restart-Service sshd
 } -Session $VMSession
 
-Write-Host "Enabling ICMP requests (ping) in firewall"
+Write-DLabLog "Enabling ICMP requests (ping) in firewall"
 
 Invoke-Command -ScriptBlock {
     New-NetFirewallRule -Name 'ICMPv4' -DisplayName 'ICMPv4' `
@@ -506,14 +599,14 @@ Invoke-Command -ScriptBlock {
         -Protocol ICMPv4 -Program Any -LocalAddress Any -RemoteAddress Any
 } -Session $VMSession
 
-Write-Host "Enabling network discovery, file and printer sharing in firewall"
+Write-DLabLog "Enabling network discovery, file and printer sharing in firewall"
 
 Invoke-Command -ScriptBlock {
     & netsh advfirewall firewall set rule group="Network Discovery" new enable=yes
     & netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=yes
 } -Session $VMSession
 
-Write-Host "Enabling remote desktop server and firewall rule"
+Write-DLabLog "Enabling remote desktop server and firewall rule"
 
 Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
@@ -523,7 +616,7 @@ Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableVirtualizedGraphics' -Type DWORD -Value 1
 } -Session $VMSession
 
-Write-Host "Rebooting VM"
+Write-DLabLog "Rebooting VM"
 
 Invoke-Command -ScriptBlock {
     Restart-Computer -Force
@@ -535,7 +628,7 @@ Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $UserName -Password $Pass
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
 
 if ($InstallWindowsUpdates) {
-    Write-Host "Installing Windows updates until VM is fully up-to-date"
+    Write-DLabLog "Installing Windows updates until VM is fully up-to-date"
 
     do {
         $WUStatus = Invoke-Command -ScriptBlock {
@@ -550,7 +643,7 @@ if ($InstallWindowsUpdates) {
             }
         } -Session $VMSession
 
-        Write-Host "WUStatus: $($WUStatus.UpdateCount), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
+        Write-DLabLog "WUStatus: $($WUStatus.UpdateCount), PendingReboot: $($WUStatus.PendingReboot): $(Get-Date)"
 
         if ($WUStatus.PendingReboot) {
             Write-Host "Waiting for VM reboot: $(Get-Date)"
@@ -562,13 +655,20 @@ if ($InstallWindowsUpdates) {
     } until (($WUStatus.PendingReboot -eq $false) -and ($WUStatus.UpdateCount -eq 0))
 }
 
-Write-Host "Cleaning up Windows base image (WinSxS folder)"
+Write-DLabLog "Remove Appx packages that can break sysprep"
+
+Invoke-Command -ScriptBlock {
+    Get-AppxPackage -Name Microsoft.MicrosoftEdge.Stable | Remove-AppxPackage
+    Get-AppxPackage *notepadplusplus* | Remove-AppxPackage
+} -Session $VMSession
+
+Write-DLabLog "Cleaning up Windows base image (WinSxS folder)"
 
 Invoke-Command -ScriptBlock {
     & dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase
 } -Session $VMSession
 
-Write-Host "Disabling Windows Update service permanently"
+Write-DLabLog "Disabling Windows Update service permanently"
 
 Invoke-Command -ScriptBlock {
     Stop-service wuauserv | Set-Service -StartupType Disabled
@@ -576,16 +676,16 @@ Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name NoAutoUpdate -Value 1 -Type DWORD
 } -Session $VMSession
 
-Write-Host "Running sysprep to generalize the image for OOBE experience and shut down VM"
+Write-DLabLog "Running sysprep to generalize the image for OOBE experience and shut down VM"
 
 Invoke-Command -ScriptBlock {
     & "$Env:WinDir\System32\Sysprep\sysprep.exe" '/oobe' '/generalize' '/shutdown' '/mode:vm'
 } -Session $VMSession
 
-Write-Host "Waiting for VM to shut down completely"
-Wait-DLabVM $VMName 'Shutdown' -Timeout 120
+Write-DLabLog "Waiting for VM to shut down completely"
+Wait-DLabVM $VMName 'Shutdown' -Timeout 900
 
-Write-Host "Deleting the VM (but not the VHDX)"
+Write-DLabLog "Deleting the VM (but not the VHDX)"
 Remove-VM $VMName -Force
 
 $ParentDisksPath = Get-DLabPath "IMGs"
@@ -595,11 +695,22 @@ $ParentDiskPath = Join-Path $ParentDisksPath $ParentDiskFileName
 $GoldenDiskFileName = "Windows Server $OSVersion Standard - $(Get-Date -Format FileDate).vhdx"
 $GoldenDiskPath = Join-Path $ParentDisksPath $GoldenDiskFileName
 
-Write-Host "Moving golden VHDX"
+if (-Not [string]::IsNullOrEmpty($OutputVhdxPath)) {
+    $GoldenDiskPath = $OutputVhdxPath
+}
+
+Write-DLabLog "Moving golden VHDX"
+
+if (Test-Path $GoldenDiskPath) {
+    Write-DLabLog "Removing previous golden VHDX"
+    Remove-Item $GoldenDiskPath -Force | Out-Null
+}
 Move-Item -Path $ParentDiskPath -Destination $GoldenDiskPath
 
-Write-Host "Optimizing golden VHDX for compact size"
+Write-DLabLog "Optimizing golden VHDX for compact size"
 Optimize-VHD -Path $GoldenDiskPath -Mode Full
 
-Write-Host "Setting golden VHDX file as read-only"
+Write-DLabLog "Setting golden VHDX file as read-only"
 Set-ItemProperty -Path $GoldenDiskPath -Name IsReadOnly $true
+
+Write-DLabLog "Golden VHDX Path: '$GoldenDiskPath'"

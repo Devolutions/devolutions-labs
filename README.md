@@ -72,7 +72,7 @@ You may need to reboot the host for the Hyper-V feature installation to complete
 
 ## Golden Image
 
-Download the latest Windows Server .iso file (*_windows_server_2022_*.iso). This is the regular Windows Server ISO which is only available to those with the right Visual Studio (MSDN) subscription, not the evaluation ISO available publicly. Ask someone on your team for a download link (hint: the person maintaining these scripts). Copy the iso file to "C:\Hyper-V\ISOs", then create the golden virtual machine image:
+Download the latest Windows Server .iso file (*_windows_server_2025_*.iso). This is the regular Windows Server ISO which is only available to those with the right Visual Studio (MSDN) subscription, not the evaluation ISO available publicly. Ask someone on your team for a download link (hint: the person maintaining these scripts). Copy the iso file to "C:\Hyper-V\ISOs", then create the golden virtual machine image:
 
 ```powershell
 .\golden.ps1
