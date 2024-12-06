@@ -6,7 +6,7 @@ if (Test-Path .\DevolutionsLabs.psm1) {
 
 $licensing = Get-Content -Path "$PSScriptRoot\licensing.json" -Raw | ConvertFrom-Json
 
-$OSVersion = "2022"
+$OSVersion = "2025"
 $LabPrefix = "IT-HELP"
 $LabDnsTld = ".ninja"
 $LabCompanyName = "IT Help Ninja"
