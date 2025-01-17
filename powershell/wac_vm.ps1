@@ -89,7 +89,8 @@ Write-Host "Installing Windows Admin Center"
 Invoke-Command -ScriptBlock { Param($WacFQDN, $CertificateFile, $CertificatePassword)
     $ProgressPreference = 'SilentlyContinue'
     $WacMsi = "$(Resolve-Path ~)\Documents\WAC.msi"
-    Invoke-WebRequest 'https://aka.ms/WACDownload' -OutFile $WacMsi
+    #Invoke-WebRequest 'https://aka.ms/WACDownload' -OutFile $WacMsi
+    Invoke-WebRequest 'https://download.microsoft.com/download/1/0/5/1059800B-F375-451C-B37E-758FFC7C8C8B/WindowsAdminCenter2311.msi' -OutFile $WacMsi
     $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
     $Params = @{
         FilePath          = $CertificateFile;
