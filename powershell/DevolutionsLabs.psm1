@@ -73,6 +73,90 @@ function Get-DLabParentDiskFilePath
     $(Get-ChildItem -Path $ParentDisksPath "*$Name*.vhdx" | Sort-Object LastWriteTime -Descending)[0]
 }
 
+function Get-DLabWindowsImageListFromIso
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [string] $IsoPath
+    )
+
+    begin {}
+
+    process {
+        # Resolve and verify the path *before* trying to mount
+        $resolvedIsoPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($IsoPath)
+        if (-not (Test-Path $resolvedIsoPath)) {
+            throw "ISO file not found: $resolvedIsoPath"
+        }
+
+        # Scope mount outside try/finally for dismount
+        $mount = $null
+        $resolvedWimPath = $null
+
+        try {
+            # Mount the ISO
+            $mount = Mount-DiskImage -ImagePath $resolvedIsoPath -PassThru -ErrorAction Stop
+            $volumes = Get-Volume -DiskImage $mount -ErrorAction SilentlyContinue
+            if (-not $volumes) {
+                throw "Failed to mount ISO. Ensure the file is valid and you have permission."
+            }
+
+            $driveLetter = $volumes.DriveLetter + ":"
+            Write-Verbose "Mounted ISO at $driveLetter"
+
+            # Locate WIM/ESD
+            $resolvedWimPath = Join-Path $driveLetter "sources\install.wim"
+            if (-not (Test-Path $resolvedWimPath)) {
+                $resolvedWimPath = Join-Path $driveLetter "sources\install.esd"
+            }
+
+            if (-not (Test-Path $resolvedWimPath)) {
+                throw "Neither install.wim nor install.esd found in $driveLetter\sources"
+            }
+
+            # Run DISM and check exit code
+            $dismOutput = dism /Get-WimInfo /WimFile:$resolvedWimPath /English
+            if ($LASTEXITCODE -eq 740) {
+                throw "DISM failed with error 740: Elevated permissions are required. Please run this session as Administrator."
+            }
+            elseif ($LASTEXITCODE -ne 0) {
+                throw "DISM failed with exit code $LASTEXITCODE. See output for details."
+            }
+
+            # Parse DISM output
+            $imageInfo = @()
+            $current = @{}
+            foreach ($line in $dismOutput) {
+                if ($line -match '^Index\s+:\s+(\d+)') {
+                    $current = @{ Index = [int]$matches[1] }
+                } elseif ($line -match '^Name\s+:\s+(.+)$') {
+                    $current.Name = $matches[1].Trim()
+                } elseif ($line -match '^Description\s+:\s+(.+)$') {
+                    $current.Description = $matches[1].Trim()
+                    $imageInfo += [PSCustomObject]$current
+                    $current = @{}
+                }
+            }
+
+            return $imageInfo | Where-Object { $_.Index -and $_.Name }
+        }
+        finally {
+            # Only attempt to dismount if it was successfully mounted
+            if ($mount) {
+                try {
+                    Dismount-DiskImage -ImagePath $resolvedIsoPath -ErrorAction SilentlyContinue | Out-Null
+                    Write-Verbose "ISO unmounted."
+                } catch {
+                    Write-Warning "Failed to unmount ISO: $_"
+                }
+            }
+        }
+    }
+
+    end {}
+}
+
 function New-DLabIsoFile
 {
     [CmdletBinding()]
@@ -485,6 +569,12 @@ function New-DLabParentVM
         }
     }
 
+    $Generation = 1
+
+    if ($OSVersion -eq '11') {
+        $Generation = 2
+    }
+
     if ([string]::IsNullOrEmpty($IsoFilePath)) {
         $IsoFilePath = $(Get-DLabIsoFilePath "windows_server_${OSVersion}").FullName
     }
@@ -495,6 +585,7 @@ function New-DLabParentVM
         Name = $Name;
         VHDPath = $ParentDisk.Path;
         MemoryStartupBytes = 4GB;
+        Generation = $Generation;
     }
 
     if ($SwitchName) {
@@ -600,6 +691,7 @@ function New-DLabAnswerFile
         [string] $AdministratorPassword,
         [Parameter(Mandatory=$true)]
         [string] $OSVersion,
+        [int] $ImageIndex,
         [string] $UILanguage = "en-US",
         [string] $UserLocale = "en-US",
         [string] $TimeZone = "Eastern Standard Time"
@@ -627,8 +719,19 @@ function New-DLabAnswerFile
         $component.UserData.Organization = $UserOrganization
     }
 
-    $OSImageName = "Windows Server $OSVersion SERVERSTANDARD"
-    $component.ImageInstall.OSImage.InstallFrom.MetaData.Value = $OSImageName
+    if ($OSVersion -eq '11') {
+        $OSImageName = "Windows $OSVersion Enterprise"
+    } else {
+        $OSImageName = "Windows Server $OSVersion SERVERSTANDARD"
+    }
+
+    if ($ImageIndex -gt 0) {
+        $component.ImageInstall.OSImage.InstallFrom.MetaData.Key = "/IMAGE/INDEX"
+        $component.ImageInstall.OSImage.InstallFrom.MetaData.Value = $ImageIndex
+    } else {
+        $component.ImageInstall.OSImage.InstallFrom.MetaData.Key = "/IMAGE/NAME"
+        $component.ImageInstall.OSImage.InstallFrom.MetaData.Value = $OSImageName
+    }
 
     $specialize = $answer.unattend.settings | Where-Object { $_.pass -Like 'specialize' }
 
