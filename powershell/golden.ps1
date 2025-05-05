@@ -210,6 +210,43 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
+Write-DLabLog "Hide 'Learn more about this picture' desktop icon"
+
+Invoke-Command -ScriptBlock {
+    $DefaultUserReg = "HKLM\TempDefault"
+    $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
+    reg load $DefaultUserReg $NtuserDatPath
+    $HKDU = "Registry::$DefaultUserReg"
+    $RegPath = "$HKDU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel"
+    New-Item -Path $RegPath -Force | Out-Null
+    Set-ItemProperty -Path $RegPath -Name '{2cc5ca98-6485-489a-920e-b3e88a6ccce3}' -Value 0 -Type DWORD
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    reg unload $DefaultUserReg
+} -Session $VMSession
+
+Write-DLabLog "Hide taskbar search box and task view button"
+
+Invoke-Command -ScriptBlock {
+    $DefaultUserReg = "HKLM\TempDefault"
+    $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
+    reg load $DefaultUserReg $NtuserDatPath
+    $HKDU = "Registry::$DefaultUserReg"
+    $RegPath = "$HKDU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    New-Item -Path $RegPath -Force | Out-Null
+    Set-ItemProperty -Path $RegPath -Name "IsSearchBoxSettingEnabled" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegPath -Name "ShowTaskViewButton" -Value 0 -Type DWORD
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    reg unload $DefaultUserReg
+} -Session $VMSession
+
+Write-DLabLog "Remove Azure Arc setup with systray icon"
+
+Invoke-Command -ScriptBlock {
+    Remove-WindowsCapability -Online -Name AzureArcSetup~~~~
+} -Session $VMSession
+
 $CloudflareWarpCA = Get-ChildItem "cert:\LocalMachine\Root" |
     Where-Object { $_.Subject -like "*Gateway CA - Cloudflare Managed G1*" }
 
