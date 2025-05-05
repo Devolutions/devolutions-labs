@@ -41,28 +41,6 @@ Write-Host ""
 
 Write-DLabLog "Creating golden image"
 
-$AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
-Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
-New-Item -ItemType Directory -Path $AnswerTempPath -ErrorAction SilentlyContinue | Out-Null
-$AnswerFilePath = Join-Path $AnswerTempPath "autounattend.xml"
-
-$Params = @{
-    UserFullName = "devolutions";
-    UserOrganization = "IT-HELP";
-    ComputerName = $Name;
-    AdministratorPassword = $Password;
-    OSVersion = $OSVersion;
-    UILanguage = "en-US";
-    UserLocale = "en-CA";
-}
-
-Write-DLabLog "Creating Windows answer file"
-
-New-DLabAnswerFile $AnswerFilePath @Params
-
-$AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
-New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
-
 if (-Not [string]::IsNullOrEmpty($InputIsoPath)) {
     $IsoFilePath = $InputIsoPath
 } else {
@@ -74,6 +52,47 @@ if (-Not (Test-Path $IsoFilePath)) {
 } else {
     Write-DLabLog "Using '$IsoFilePath' ISO file"
 }
+
+Write-DLabLog "Scanning image list from Windows ISO"
+
+$ImageList = Get-DLabWindowsImageListFromIso $IsoFilePath | Select-Object -Property Index, Name
+$ImageList | Format-List
+
+if ($OSVersion -eq '11') {
+    $Image = $ImageList | Where-Object { $_.Name -Like 'Windows * Enterprise' } | Select-Object -First 1
+} else {
+    $Image = $ImageList | Where-Object { $_.Name -Like 'Windows Server * Standard (Desktop Experience)' } | Select-Object -First 1
+}
+
+if (-Not $Image) {
+    throw "Could not automatically select image to install from the list"
+}
+
+$ImageIndex = $Image.Index
+Write-DLabLog "Using Windows image [$ImageIndex]: $($Image.Name)"
+
+Write-DLabLog "Creating Windows answer file"
+
+$AnswerTempPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName"
+Remove-Item $AnswerTempPath -Force  -Recurse -ErrorAction SilentlyContinue | Out-Null
+New-Item -ItemType Directory -Path $AnswerTempPath -ErrorAction SilentlyContinue | Out-Null
+$AnswerFilePath = Join-Path $AnswerTempPath "autounattend.xml"
+
+$Params = @{
+    UserFullName = "devolutions";
+    UserOrganization = "IT-HELP";
+    ComputerName = $Name;
+    AdministratorPassword = $Password;
+    OSVersion = $OSVersion;
+    ImageIndex = $ImageIndex;
+    UILanguage = "en-US";
+    UserLocale = "en-CA";
+}
+
+New-DLabAnswerFile $AnswerFilePath @Params
+
+$AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
+New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
 
 New-DLabParentVM $VMName -OSVersion $OSVersion -IsoFilePath $IsoFilePath -Force
 
