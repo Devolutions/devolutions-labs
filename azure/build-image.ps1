@@ -56,6 +56,12 @@ $innerTemplate = @{
   properties = $template.properties
 }
 
+Remove-AzResource -ResourceGroupName $resourceGroup `
+                  -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
+                  -ResourceName $templateName `
+                  -ApiVersion $template.apiVersion `
+                  -Force
+
 New-AzResource -ResourceGroupName $resourceGroup `
                -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
                -ResourceName $templateName `
