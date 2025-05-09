@@ -1,5 +1,6 @@
 
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
 Write-Host "Enabling TLS 1.2 for .NET Framework applications"
 
@@ -59,7 +60,6 @@ Set-ItemProperty -Path $RegPath -Name "ShowTaskViewButton" -Value 0 -Type DWORD
 
 Write-Host "Fixing DbgHelp DLLs and _NT_SYMBOL_PATH"
 
-$ProgressPreference = "SilentlyContinue"
 New-Item -ItemType Directory -Path "C:\symbols" -ErrorAction SilentlyContinue | Out-Null
 [Environment]::SetEnvironmentVariable("_NT_SYMBOL_PATH", "srv*c:\symbols*https://msdl.microsoft.com/download/symbols", "Machine")
 
@@ -158,10 +158,31 @@ Write-Host "Installing Remote Server Administration DNS tools"
 
 Install-WindowsFeature RSAT-DNS-Server
 
+Write-Host "Creating directories for tools"
+
+New-Item -ItemType Directory -Path "C:\tools" -ErrorAction SilentlyContinue | Out-Null
+New-Item -ItemType Directory -Path "C:\tools\bin" -ErrorAction SilentlyContinue | Out-Null
+New-Item -ItemType Directory -Path "C:\tools\scripts" -ErrorAction SilentlyContinue | Out-Null
+New-Item -ItemType Directory -Path "C:\tools\installers" -ErrorAction SilentlyContinue | Out-Null
+[Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
+
+Write-Host "Downloading useful installers for tools"
+
+Push-Location
+Set-Location "C:\tools"
+Invoke-WebRequest 'https://npcap.com/dist/npcap-1.82.exe' -OutFile "npcap-1.82.exe"
+Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "CCProxySetup.exe"
+Pop-Location
+
+Write-Host "Installing Sysinternals Suite"
+
+Invoke-WebRequest "https://download.sysinternals.com/files/SysinternalsSuite.zip" -OutFile "SysinternalsSuite.zip"
+Expand-Archive -Path ".\SysinternalsSuite.zip" -DestinationPath "C:\tools\bin" -Force
+Remove-Item ".\SysinternalsSuite.zip"
+
 Write-Host "Installing Nirsoft tools"
 
-$ProgressPreference = "SilentlyContinue"
-New-Item -ItemType Directory -Path "C:\tools" -ErrorAction SilentlyContinue | Out-Null
+Push-Location
 Set-Location "C:\tools"
 # https://www.nirsoft.net/utils/regscanner.html
 Invoke-WebRequest 'https://www.nirsoft.net/utils/regscanner_setup.exe' -OutFile "regscanner_setup.exe"
@@ -202,10 +223,18 @@ Remove-Item ".\regfromapp-x64.zip"
 # cleanup binary output directory
 Remove-Item "C:\tools\bin\*.txt"
 Remove-Item "C:\tools\bin\*.chm"
+Pop-Location
+
+Write-Host "Installing WinSpy"
+
+# https://www.catch22.net/projects/winspy/
+Invoke-WebRequest "https://github.com/strobejb/winspy/releases/download/v1.8.4/WinSpy_Release_x64.zip" -OutFile "WinSpy_Release.zip"
+Expand-Archive -Path ".\WinSpy_Release.zip" -DestinationPath ".\WinSpy_Release" -Force
+Copy-Item ".\WinSpy_Release\winspy.exe" "C:\tools\bin" -Force
+Remove-Item ".\WinSpy_Release*" -Recurse -Force
 
 Write-Host "Installing OpenSSL"
 
-$ProgressPreference = "SilentlyContinue"
 $openssl_hashes = 'https://github.com/slproweb/opensslhashes/raw/master/win32_openssl_hashes.json'
 $openssl_json = (Invoke-WebRequest -UseBasicParsing $openssl_hashes).Content | ConvertFrom-Json
 $openssl_filenames = Get-Member -InputObject $openssl_json.files -MemberType NoteProperty | Select-Object -ExpandProperty Name
@@ -223,10 +252,17 @@ Start-Process msiexec.exe -Wait -ArgumentList @("/i", "OpenSSL.msi", "/qn")
 [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\OpenSSL-Win64\bin", "Machine")
 Remove-Item "OpenSSL.msi"
 
+Write-Host "Install Devolutions MsRdpEx"
+
+$MsRdpExVersion = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/MsRdpEx/releases/latest").tag_name.TrimStart("v")
+$MsRdpExUrl = "https://github.com/Devolutions/MsRdpEx/releases/download/v$MsRdpExVersion/MsRdpEx-$MsRdpExVersion-x64.msi"
+Invoke-WebRequest -UseBasicParsing -Uri $MsRdpExUrl -OutFile "MsRdpEx.msi"
+Start-Process msiexec.exe -Wait -ArgumentList @("/i", "MsRdpEx.msi", "/qn")
+Remove-Item "MsRdpEx.msi"
+
 Write-Host "Installing Devolutions Windows Terminal"
 
-$ProgressPreference = "SilentlyContinue"
-$WtVersion = "1.20.11271.0"
+$WtVersion = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/wt-distro/releases/latest").tag_name.TrimStart("v")
 $WtDownloadBase = "https://github.com/Devolutions/wt-distro/releases/download"
 $WtDownloadUrl = "$WtDownloadBase/v${WtVersion}/WindowsTerminal-${WtVersion}-x64.msi"
 Invoke-WebRequest -UseBasicParsing $WtDownloadUrl -OutFile "WindowsTerminal.msi"
@@ -249,7 +285,6 @@ $Packages = @(
     'kdiff3',
     'filezilla',
     'wireshark',
-    'sysinternals',
     'sublimetext3',
     'notepadplusplus'
 )
@@ -258,6 +293,47 @@ foreach ($Package in $Packages) {
     Write-Host "Installing $Package"
     choco install -y --no-progress $Package
 }
+
+Write-Host "Installing UltraVNC client and server"
+
+Invoke-WebRequest 'https://www.uvnc.eu/download/1430/UltraVNC_1435_X64_Setup.exe' -OutFile "UltraVNC_Setup.exe"
+Start-Process .\UltraVNC_Setup.exe -Wait -ArgumentList ("/VERYSILENT", "/NORESTART")
+Remove-Item .\UltraVNC_Setup.exe
+
+$Params = @{
+    Name = "uvnc_service";
+    DisplayName = "UltraVNC Server";
+    Description = "Provides secure remote desktop sharing";
+    BinaryPathName = "$Env:ProgramFiles\uvnc bvba\UltraVNC\winvnc.exe -service";
+    DependsOn = "Tcpip";
+    StartupType = "Automatic";
+}
+New-Service @Params
+
+$Params = @{
+    DisplayName = "Allow UltraVNC";
+    Direction = "Inbound";
+    Program = "$Env:ProgramFiles\uvnc bvba\UltraVNC\winvnc.exe";
+    Action = "Allow"
+}
+New-NetFirewallRule @Params
+
+$IniFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\ultravnc.ini"
+$IniData = Get-Content $IniFile | foreach {
+    switch ($_) {
+        "MSLogonRequired=0" { "MSLogonRequired=1" }
+        "NewMSLogon=0" { "NewMSLogon=1" }
+        default { $_ }
+    }
+}
+$Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+[System.IO.File]::WriteAllLines($IniFile, $IniData, $Utf8NoBomEncoding)
+
+$AclFile = "$Env:ProgramFiles\uvnc bvba\UltraVNC\acl.txt"
+$AclData = "allow`t0x00000003`t`"BUILTIN\Remote Desktop Users`""
+$Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+[System.IO.File]::WriteAllLines($AclFile, $AclData, $Utf8NoBomEncoding)
+Start-Process -FilePath "$Env:ProgramFiles\uvnc bvba\UltraVNC\MSLogonACL.exe" -ArgumentList @('/i', '/o', $AclFile) -Wait -NoNewWindow
 
 Write-Host "Enabling OpenSSH client and server features"
 

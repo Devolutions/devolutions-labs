@@ -1,13 +1,28 @@
 
 $resourceGroup = "ImageBuilderRG"
 $location = "canadacentral"
-$templateName = "WinServerGoldenImage"
-$imageName = "WinServer2022-Golden"
+$templateName = "WindowsServer2025Golden"
+$imageName = "WindowsServer2025-Golden"
 $runOutputName ='aibWindows'
 $scriptUri = "https://raw.githubusercontent.com/Devolutions/devolutions-labs/refs/heads/azure/azure/customize.ps1"
 
-$subscriptionId = $((Get-AzContext).Subscription.Id)
+Register-AzResourceProvider -ProviderNamespace Microsoft.VirtualMachineImages
+
+New-AzResourceGroup -Name $resourceGroup -Location $location -Force
+
 $identityName = "aib-identity"
+$identity = New-AzUserAssignedIdentity -ResourceGroupName $resourceGroup -Name $identityName -Location $location
+
+$subscriptionId = $((Get-AzContext).Subscription.Id)
+New-AzRoleAssignment -ObjectId $identity.PrincipalId `
+                     -RoleDefinitionName "Contributor" `
+                     -Scope "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup"
+
+New-AzRoleAssignment -ObjectId $identity.PrincipalId `
+                     -RoleDefinitionName "Managed Identity Operator" `
+                     -Scope "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup"
+
+$subscriptionId = $((Get-AzContext).Subscription.Id)
 $imgBuilderId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$identityName"
 
 # Define replacement values
@@ -98,3 +113,5 @@ function Wait-AzImageBuilderTemplateCompletion {
     Write-Host "📦 Final status: $status"
     Write-Host "📨 Message: $message"
 }
+
+Wait-AzImageBuilderTemplateCompletion -ResourceGroupName $resourceGroup -TemplateName $templateName
