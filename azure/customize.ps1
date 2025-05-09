@@ -236,6 +236,7 @@ Remove-Item "WindowsTerminal.msi"
 Write-Host "Installing useful chocolatey packages"
 
 $Packages = @(
+    'vcredist140',
     'git.install',
     'vlc',
     '7zip',
