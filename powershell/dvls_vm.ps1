@@ -69,11 +69,10 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing IIS ASP.NET Core Module (ANCM)"
 
 Invoke-Command -ScriptBlock {
-    # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/?view=aspnetcore-6.0
-    # https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/hosting-bundle?view=aspnetcore-6.0
-    $DotNetHostingFileName = "dotnet-hosting-6.0.16-win.exe"
-    $DotNetHostingFileUrl = "https://download.visualstudio.microsoft.com/download/pr/7ab0bc25-5b00-42c3-b7cc-bb8e08f05135/91528a790a28c1f0fe39845decf40e10/$DotNetHostingFileName"
-    $DotNetHostingFileSHA512 = '5fafc4170dce11f52d970d14e737f5b85491b5257bb7eb5b3c5e9bd275469ac2482185e3d3464a18cb522dfb7f582287451e2f24f86cdaaa3de017e1c8300711'
+    # https://dotnet.microsoft.com/permalink/dotnetcore-current-windows-runtime-bundle-installer
+    $DotNetHostingFileName = "dotnet-hosting-9.0.4-win.exe"
+    $DotNetHostingFileUrl = "https://builds.dotnet.microsoft.com/dotnet/aspnetcore/Runtime/9.0.4/$DotNetHostingFileName"
+    $DotNetHostingFileSHA512 = 'e02d6e48361bc09f84aefef0653bd1eaa1324795d120758115818d77f1ba0bca751dcc7e7c143293c7831fd72ff566d7c2248d1cb795f8d251c04631bc4459ea'
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
@@ -126,11 +125,55 @@ Invoke-Command -ScriptBlock {
     Install-Module -Name SqlServer -Scope AllUsers -AllowClobber -Force
 } -Session $VMSession
 
+Write-Host "Creating SQL database for RDM"
+
+$SqlInstance = "localhost\SQLEXPRESS"
+$RdmDatabaseName = "rdm"
+$RdmSqlUsername = "rdm"
+$RdmSqlPassword = "sql123!"
+
+Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance)
+    Import-Module SqlServer -Force
+    $SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
+    $SqlServer.Settings.LoginMode = [Microsoft.SqlServer.Management.SMO.ServerLoginMode]::Mixed
+    $SqlServer.Alter()
+    $Database = New-Object Microsoft.SqlServer.Management.Smo.Database($SqlServer, $DatabaseName)
+    $Database.Create()
+    $Database.RecoveryModel = "simple"
+    $Database.Alter()
+    Get-Service -Name 'MSSQL$SQLEXPRESS' | Restart-Service
+    Start-Sleep -Seconds 2
+} -Session $VMSession -ArgumentList @($RdmDatabaseName, $SqlInstance)
+
+Write-Host "Creating SQL user for RDM"
+
+Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
+    Import-Module SqlServer -Force
+    $SecurePassword = ConvertTo-SecureString $SqlPassword -AsPlainText -Force
+    $SqlCredential = New-Object System.Management.Automation.PSCredential @($SqlUsername, $SecurePassword)
+    $Params = @{
+        ServerInstance = $SqlInstance;
+        LoginPSCredential = $SqlCredential;
+        LoginType = "SqlLogin";
+        GrantConnectSql = $true;
+        Enable = $true;
+    }
+    Add-SqlLogin @Params
+    $SqlServer = New-Object Microsoft.SqlServer.Management.Smo.Server($SqlInstance)
+    $Database = $SqlServer.Databases[$DatabaseName]
+    $Database.SetOwner('sa')
+    $Database.Alter()
+    $User = New-Object Microsoft.SqlServer.Management.Smo.User($Database, $SqlUsername)
+    $User.Login = $SqlUsername
+    $User.Create()
+    $Role = $Database.Roles['db_owner']
+    $Role.AddMember($SqlUsername)
+} -Session $VMSession -ArgumentList @($RdmDatabaseName, $SqlInstance, $RdmSqlUsername, $RdmSqlPassword)
+
 Write-Host "Creating SQL database for DVLS"
 
-$DatabaseName = "dvls"
 $SqlInstance = "localhost\SQLEXPRESS"
-
+$DatabaseName = "dvls"
 $SqlUsername = "dvls"
 $SqlPassword = "sql123!"
 
@@ -172,8 +215,28 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
     $Role.AddMember($SqlUsername)
 } -Session $VMSession -ArgumentList @($DatabaseName, $SqlInstance, $SqlUsername, $SqlPassword)
 
-$DvlsVersion = "2023.3.13.0"
-$GatewayVersion = "2023.3.0.0"
+$DvlsVersion = ""
+$GatewayVersion = ""
+
+$ProductsHtm = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.htm" -Method 'GET' -ContentType 'text/plain'
+foreach ($line in $($ProductsHtm -split "`n")) {
+    if ($line -match '^DPSbin\.Version=(.+)$') {
+        $DvlsVersion = $matches[1].Trim()
+    } elseif ($line -match '^Gatewaybin\.Version=(.+)$') {
+        $GatewayVersion = $matches[1].Trim()
+    }
+}
+
+if ([string]::IsNullOrEmpty($DvlsVersion)) {
+    throw "failed to detect DVLS version"
+}
+Write-Host "DVLS Version: $DVLSVersion"
+
+if ([string]::IsNullOrEmpty($GatewayVersion)) {
+    throw "failed to detect DVLS version"
+}
+Write-Host "Gateway Version: $GatewayVersion"
+
 $DvlsSiteName = "DVLS"
 $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
@@ -207,6 +270,52 @@ Request-DLabCertificate $VMName -VMSession $VMSession `
     -CAHostName $CAHostName -CACommonName $CACommonName `
     -CertificateFile $CertificateFile -Password $CertificatePassword
 
+Write-Host "Enabling and configuring TLS in SQL Server"
+
+Invoke-Command -ScriptBlock {
+    $SqlServerBaseKey = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL16.SQLEXPRESS\MSSQLServer"
+    $SuperSocketLibKey = Join-Path $SqlServerBaseKey "SuperSocketNetLib"
+    $SuperSocketLibTcpKey = Join-Path $SuperSocketLibKey "Tcp"
+    $SuperSocketLibTcpIpAllKey = Join-Path $SuperSocketLibTcpKey "IPAll"
+
+    Set-ItemProperty -Path $SuperSocketLibTcpKey -Name "Enabled" -Value 1
+    Set-ItemProperty -Path $SuperSocketLibTcpIpAllKey -Name "TcpPort" -Value "1433"
+    Set-ItemProperty -Path $SuperSocketLibTcpIpAllKey -Name "TcpDynamicPorts" -Value ""
+
+    $cert = Get-ChildItem "cert:\LocalMachine\My" |
+        Where-Object { $_.Subject -like "CN=$Env:COMPUTERNAME.*" } |
+        Sort-Object NotBefore -Descending | Select-Object -First 1
+
+    if (-Not $cert) {
+        throw "TLS certificate not found for CN=$Env:COMPUTERNAME"
+    }
+
+    $thumbprint = $cert.Thumbprint
+    $keyId = if ($PSEdition -eq 'Core') {
+        $cert.PrivateKey.Key.UniqueName
+    } else {
+        $cert.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+    }
+    $keyFile = Join-Path "$Env:ProgramData\Microsoft\Crypto\RSA\MachineKeys" $keyId
+
+    $scOut = sc.exe showsid 'MSSQL$SQLEXPRESS'
+    $sid = ($scOut | Select-String -Pattern '^SERVICE SID:').ToString().Split(':')[1].Trim()
+
+    $acl = Get-Acl -Path $keyFile
+    $sidObj = New-Object System.Security.Principal.SecurityIdentifier($sid)
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sidObj, "Read", "Allow")
+    $acl.AddAccessRule($rule)
+    Set-Acl -Path $keyFile -AclObject $acl
+
+    Set-ItemProperty -Path $SuperSocketLibKey -Name "Certificate" -Value $thumbprint
+    Set-ItemProperty -Path $SuperSocketLibKey -Name "ForceEncryption" -Value 0 -Type DWORD
+
+    New-NetFirewallRule -DisplayName "SQL Server TCP 1433" -Direction Inbound -Protocol TCP -LocalPort 1433 -Action Allow
+
+    Restart-Service -Name 'MSSQL$SQLEXPRESS' -Force
+    Start-Sleep -Seconds 2
+} -Session $VMSession
+
 Write-Host "Creating Devolutions Server IIS site"
 
 Invoke-Command -ScriptBlock { Param($DvlsHostName, $DvlsSiteName, $DvlsPath, $CertificateFile, $CertificatePassword)
@@ -234,6 +343,21 @@ Invoke-Command -ScriptBlock { Param($DvlsHostName, $DvlsSiteName, $DvlsPath, $Ce
     New-IISSite @Params
 } -Session $VMSession -ArgumentList @($DvlsHostName, $DvlsSiteName, $DvlsPath, $CertificateFile, $CertificatePassword)
 
+Write-Host "Installing .NET Desktop Runtime"
+
+Invoke-Command -ScriptBlock {
+    # https://dotnet.microsoft.com/en-us/download/dotnet/9.0
+    $DotNetDesktopRuntimeFileName = "windowsdesktop-runtime-9.0.4-win-x64.exe"
+    $DotNetDesktopRuntimeFileUrl = "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/9.0.4/$DotNetDesktopRuntimeFileName"
+    $DotNetDesktopRuntimeFileSHA512 = 'c277fe5434b66c05f7782d40b90ab04dd2a9ac3d1570b2ab96a2311a58aeefff27761ca4488aadebe3b897e961b24b2f9c5a597ee27c2c4387d3cf0833f6cc48'
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest $DotNetDesktopRuntimeFileUrl -OutFile "${Env:TEMP}\$DotNetDesktopRuntimeFileName"
+    $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetDesktopRuntimeFileName").Hash
+    if ($DotNetDesktopRuntimeFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetDesktopRuntimeFileName`: $DotNetDesktopRuntimeFileSHA512" }
+    Start-Process -FilePath "${Env:TEMP}\$DotNetDesktopRuntimeFileName" -ArgumentList @('/install', '/quiet', '/norestart', 'OPT_NO_X86=1') -Wait -NoNewWindow
+    Remove-Item "${Env:TEMP}\$DotNetDesktopRuntimeFileName" -Force | Out-Null
+} -Session $VMSession
+
 Write-Host "Installing Devolutions Console"
 
 Invoke-Command -ScriptBlock { Param($DvlsVersion)
@@ -241,7 +365,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion)
     $DownloadBaseUrl = "https://cdn.devolutions.net/download"
     $DvlsConsoleExe = "$(Resolve-Path ~)\Documents\Setup.DVLS.Console.exe"
     Invoke-WebRequest "$DownloadBaseUrl/Setup.DVLS.Console.${DvlsVersion}.exe" -OutFile $DvlsConsoleExe
-    Start-Process -FilePath $DvlsConsoleExe -ArgumentList @('/qn') -Wait
+    Start-Process -FilePath $DvlsConsoleExe -ArgumentList @('/exenoui', '/quiet', '/norestart') -Wait
 } -Session $VMSession -ArgumentList @($DvlsVersion)
 
 Write-Host "Installing Devolutions Server"
@@ -305,7 +429,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
         $DvlsConsoleArgs += @('--serial', $DvlsLicense)
     }
 
-    $DvlsConsoleCli = "${Env:ProgramFiles(x86)}\Devolutions\Devolutions Server Console\DPS.Console.CLI.exe"
+    $DvlsConsoleCli = "${Env:ProgramFiles}\Devolutions\Devolutions Server Console\DPS.Console.CLI.exe"
 
     Write-Host "& '$DvlsConsoleCli' $($DvlsConsoleArgs -Join ' ')"
 
