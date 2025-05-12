@@ -56,11 +56,15 @@ $innerTemplate = @{
   properties = $template.properties
 }
 
+# Delete template if it already exists (cannot be overwritten)
+
 Remove-AzResource -ResourceGroupName $resourceGroup `
                   -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
                   -ResourceName $templateName `
                   -ApiVersion $template.apiVersion `
                   -Force
+
+# Create image template resource
 
 New-AzResource -ResourceGroupName $resourceGroup `
                -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
@@ -121,3 +125,23 @@ function Wait-AzImageBuilderTemplateCompletion {
 }
 
 Wait-AzImageBuilderTemplateCompletion -ResourceGroupName $resourceGroup -TemplateName $templateName
+
+## Publish managed image into Shared Image Gallery
+
+$GalleryName = "MyImageGallery"
+$Publisher = "DevoLabs"
+$Offer = "WindowsServer"
+$Sku = "2025-golden"
+
+New-AzGallery -ResourceGroupName $resourceGroup -Name $GalleryName -Location $Location
+
+New-AzGalleryImageDefinition -GalleryName $GalleryName -ResourceGroupName $resourceGroup `
+    -Location $Location -Name $ImageName -OsType Windows -Publisher $Publisher `
+    -Offer $Offer -Sku $Sku -OsState Generalized -HyperVGeneration V2
+
+New-AzGalleryImageVersion -GalleryImageDefinitionName $ImageName `
+    -GalleryName $GalleryName -ResourceGroupName $resourceGroup `
+    -Location $Location -TargetRegion @(@{Name = $Location}) `
+    -SourceImageId "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.Compute/images/$imageName" `
+    -PublishingProfileEndOfLifeDate (Get-Date).AddYears(3) `
+    -Name "1.0.0"
