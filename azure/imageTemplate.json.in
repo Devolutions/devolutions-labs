@@ -49,6 +49,7 @@
                 "imageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/images/<imageName>",
                 "location": "<region>",
                 "runOutputName": "<runOutputName>",
+                "osState": "<osState>",
                 "artifactTags": {
                     "source": "azVmImageBuilder",
                     "baseosimg": "windows2025"

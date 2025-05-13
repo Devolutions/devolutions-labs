@@ -26,6 +26,10 @@ New-Item -Path $RegPath -Force | Out-Null
 New-ItemProperty -Path $RegPath -Name "HideFirstRunExperience" -Value 1 -Force | Out-Null
 New-ItemProperty -Path $RegPath -Name "NewTabPageLocation" -Value "https://www.google.com" -Force | Out-Null
 
+Write-Host "Disabling Secure Time Seeding (STS) problematic feature"
+
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config" -Name "UtilizeSslTimeData" -Value 0 -Type DWORD
+
 Write-Host "Loading default user registry hive"
 
 $DefaultUserReg = "HKLM\TempDefault"

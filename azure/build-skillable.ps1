@@ -1,10 +1,10 @@
 
-$resourceGroup = "ImageBuilderRG"
-$location = "canadacentral"
-$templateName = "WindowsServer2025Golden"
-$imageName = "WindowsServer2025-Golden"
-$runOutputName ='aibWindows'
-$osState = "Generalized"
+$resourceGroup = "SkillableBuilder"
+$location = "centralus"
+$templateName = "WindowsServer2025Base"
+$imageName = "WindowsServer2025-Base"
+$runOutputName ='aibSkillable'
+$osState = "Specialized"
 $scriptUri = "https://raw.githubusercontent.com/Devolutions/devolutions-labs/refs/heads/azure/azure/customize.ps1"
 
 if (Test-Path .\AzureLabHelpers.psm1) {
@@ -15,7 +15,7 @@ Register-AzResourceProvider -ProviderNamespace Microsoft.VirtualMachineImages
 
 New-AzResourceGroup -Name $resourceGroup -Location $location -Force
 
-$identityName = "aib-identity"
+$identityName = "aib-skillable"
 $identity = New-AzUserAssignedIdentity -ResourceGroupName $resourceGroup -Name $identityName -Location $location
 
 $subscriptionId = $((Get-AzContext).Subscription.Id)
@@ -41,7 +41,6 @@ $variables = @{
     "<rgName>"        = $resourceGroup
     "<scriptUri>"     = $scriptUri
 }
-
 # Read template file
 $inputTemplatePath = "imageTemplate.json.in"
 $templatePath = "imageTemplate.json"
@@ -83,61 +82,14 @@ New-AzResource -ResourceGroupName $resourceGroup `
 
 Start-AzImageBuilderTemplate -ResourceGroupName $resourceGroup -Name $templateName -NoWait
 
-function Wait-AzImageBuilderTemplateCompletion {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [string] $ResourceGroupName,
-
-        [Parameter(Mandatory)]
-        [string] $TemplateName,
-
-        [int] $PollIntervalSeconds = 30
-    )
-
-    Write-Host "⏳ Monitoring build for '$TemplateName' in resource group '$ResourceGroupName'..."
-    $template = Get-AzImageBuilderTemplate -ResourceGroupName $ResourceGroupName -Name $TemplateName
-    $start = $template.LastRunStatusStartTime
-
-    if (-not $start) {
-        Write-Warning "Build has not started yet. Exiting."
-        return
-    }
-
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-
-    do {
-        $template = Get-AzImageBuilderTemplate -ResourceGroupName $ResourceGroupName -Name $TemplateName
-        $status = $template.LastRunStatusRunState
-        $subStatus = $template.LastRunStatusRunSubState
-        $message = $template.LastRunStatusMessage
-
-        $elapsed = [datetime]::UtcNow - $start
-        $stamp = Get-Date -Format "HH:mm:ss"
-        Write-Host "[$stamp] Status: $status / $subStatus (Elapsed: $($elapsed.ToString("hh\:mm\:ss"))) - $message"
-
-        Start-Sleep -Seconds $PollIntervalSeconds
-    } while ($status -eq "Running")
-
-    $sw.Stop()
-    $end = $template.LastRunStatusEndTime
-    $totalTime = $end - $start
-
-    Write-Host ""
-    Write-Host "🏁 Build completed."
-    Write-Host "🕒 Total build time: $($totalTime.ToString("hh\:mm\:ss"))"
-    Write-Host "📦 Final status: $status"
-    Write-Host "📨 Message: $message"
-}
-
 Wait-AzImageBuilderTemplateCompletion -ResourceGroupName $resourceGroup -TemplateName $templateName
 
 ## Publish managed image into Shared Image Gallery
 
-$GalleryName = "MyImageGallery"
+$GalleryName = "SkillableTest"
 $Publisher = "DevoLabs"
 $Offer = "WindowsServer"
-$Sku = "2025-golden"
+$Sku = "2025-base"
 
 New-AzGallery -ResourceGroupName $resourceGroup -Name $GalleryName -Location $Location
 
