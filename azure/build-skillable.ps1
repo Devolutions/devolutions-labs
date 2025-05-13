@@ -5,7 +5,13 @@ $templateName = "WindowsServer2025Base"
 $imageName = "WindowsServer2025-Base"
 $runOutputName ='aibSkillable'
 $osState = "Specialized"
-$scriptUri = "https://raw.githubusercontent.com/Devolutions/devolutions-labs/refs/heads/azure/azure/customize.ps1"
+
+$BaseCustomizerUrl = "https://raw.githubusercontent.com/Devolutions/devolutions-labs/refs/heads/azure/azure/customizers"
+$scriptUri = "$BaseCustomizerUrl/base-windows-customization.ps1"
+$skillableScriptUri = "$BaseCustomizerUrl/skillable-integration-services.ps1"
+
+$identityName = "aib-skillable"
+$subscriptionId = $((Get-AzContext).Subscription.Id)
 
 if (Test-Path .\AzureLabHelpers.psm1) {
     Import-Module .\AzureLabHelpers.psm1 -Force
@@ -15,10 +21,8 @@ Register-AzResourceProvider -ProviderNamespace Microsoft.VirtualMachineImages
 
 New-AzResourceGroup -Name $resourceGroup -Location $location -Force
 
-$identityName = "aib-skillable"
 $identity = New-AzUserAssignedIdentity -ResourceGroupName $resourceGroup -Name $identityName -Location $location
 
-$subscriptionId = $((Get-AzContext).Subscription.Id)
 New-AzRoleAssignment -ObjectId $identity.PrincipalId `
                      -RoleDefinitionName "Contributor" `
                      -Scope "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup"
@@ -27,7 +31,6 @@ New-AzRoleAssignment -ObjectId $identity.PrincipalId `
                      -RoleDefinitionName "Managed Identity Operator" `
                      -Scope "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup"
 
-$subscriptionId = $((Get-AzContext).Subscription.Id)
 $imgBuilderId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$identityName"
 
 # Define replacement values
@@ -36,13 +39,13 @@ $variables = @{
     "<imgBuilderId>"  = $imgBuilderId
     "<imageName>"     = $imageName
     "<runOutputName>" = $runOutputName
-    "<osState>"       = $osState
     "<subscriptionID>"= $subscriptionId
     "<rgName>"        = $resourceGroup
     "<scriptUri>"     = $scriptUri
+    "<skillableScriptUri>" = $skillableScriptUri
 }
 # Read template file
-$inputTemplatePath = "imageTemplate.json.in"
+$inputTemplatePath = "skillableTemplate.json.in"
 $templatePath = "imageTemplate.json"
 $template = Get-Content -Raw -Path $inputTemplatePath
 
@@ -95,7 +98,7 @@ New-AzGallery -ResourceGroupName $resourceGroup -Name $GalleryName -Location $Lo
 
 New-AzGalleryImageDefinition -GalleryName $GalleryName -ResourceGroupName $resourceGroup `
     -Location $Location -Name $ImageName -OsType Windows -Publisher $Publisher `
-    -Offer $Offer -Sku $Sku -OsState Generalized -HyperVGeneration V2
+    -Offer $Offer -Sku $Sku -OsState $osState -HyperVGeneration V2
 
 New-AzGalleryImageVersion -GalleryImageDefinitionName $ImageName `
     -GalleryName $GalleryName -ResourceGroupName $resourceGroup `

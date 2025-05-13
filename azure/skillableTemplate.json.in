@@ -34,6 +34,12 @@
                 "scriptUri": "<scriptUri>"
             },
             {
+                "type": "PowerShell",
+                "name": "Run skillable customization script",
+                "runElevated": true,
+                "scriptUri": "<skillableScriptUri>"
+            },
+            {
                 "type": "WindowsUpdate",
                 "searchCriteria": "IsInstalled=0",
                 "filters": [

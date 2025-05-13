@@ -5,7 +5,9 @@ $templateName = "WindowsServer2025Golden"
 $imageName = "WindowsServer2025-Golden"
 $runOutputName ='aibWindows'
 $osState = "Generalized"
-$scriptUri = "https://raw.githubusercontent.com/Devolutions/devolutions-labs/refs/heads/azure/azure/customize.ps1"
+
+$BaseCustomizerUrl = "https://raw.githubusercontent.com/Devolutions/devolutions-labs/refs/heads/azure/azure/customizers"
+$scriptUri = "$BaseCustomizerUrl/base-windows-customization.ps1"
 
 if (Test-Path .\AzureLabHelpers.psm1) {
     Import-Module .\AzureLabHelpers.psm1 -Force
@@ -36,7 +38,6 @@ $variables = @{
     "<imgBuilderId>"  = $imgBuilderId
     "<imageName>"     = $imageName
     "<runOutputName>" = $runOutputName
-    "<osState>"       = $osState
     "<subscriptionID>"= $subscriptionId
     "<rgName>"        = $resourceGroup
     "<scriptUri>"     = $scriptUri
@@ -83,53 +84,6 @@ New-AzResource -ResourceGroupName $resourceGroup `
 
 Start-AzImageBuilderTemplate -ResourceGroupName $resourceGroup -Name $templateName -NoWait
 
-function Wait-AzImageBuilderTemplateCompletion {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [string] $ResourceGroupName,
-
-        [Parameter(Mandatory)]
-        [string] $TemplateName,
-
-        [int] $PollIntervalSeconds = 30
-    )
-
-    Write-Host "⏳ Monitoring build for '$TemplateName' in resource group '$ResourceGroupName'..."
-    $template = Get-AzImageBuilderTemplate -ResourceGroupName $ResourceGroupName -Name $TemplateName
-    $start = $template.LastRunStatusStartTime
-
-    if (-not $start) {
-        Write-Warning "Build has not started yet. Exiting."
-        return
-    }
-
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-
-    do {
-        $template = Get-AzImageBuilderTemplate -ResourceGroupName $ResourceGroupName -Name $TemplateName
-        $status = $template.LastRunStatusRunState
-        $subStatus = $template.LastRunStatusRunSubState
-        $message = $template.LastRunStatusMessage
-
-        $elapsed = [datetime]::UtcNow - $start
-        $stamp = Get-Date -Format "HH:mm:ss"
-        Write-Host "[$stamp] Status: $status / $subStatus (Elapsed: $($elapsed.ToString("hh\:mm\:ss"))) - $message"
-
-        Start-Sleep -Seconds $PollIntervalSeconds
-    } while ($status -eq "Running")
-
-    $sw.Stop()
-    $end = $template.LastRunStatusEndTime
-    $totalTime = $end - $start
-
-    Write-Host ""
-    Write-Host "🏁 Build completed."
-    Write-Host "🕒 Total build time: $($totalTime.ToString("hh\:mm\:ss"))"
-    Write-Host "📦 Final status: $status"
-    Write-Host "📨 Message: $message"
-}
-
 Wait-AzImageBuilderTemplateCompletion -ResourceGroupName $resourceGroup -TemplateName $templateName
 
 ## Publish managed image into Shared Image Gallery
@@ -143,7 +97,7 @@ New-AzGallery -ResourceGroupName $resourceGroup -Name $GalleryName -Location $Lo
 
 New-AzGalleryImageDefinition -GalleryName $GalleryName -ResourceGroupName $resourceGroup `
     -Location $Location -Name $ImageName -OsType Windows -Publisher $Publisher `
-    -Offer $Offer -Sku $Sku -OsState Generalized -HyperVGeneration V2
+    -Offer $Offer -Sku $Sku -OsState $osState -HyperVGeneration V2
 
 New-AzGalleryImageVersion -GalleryImageDefinitionName $ImageName `
     -GalleryName $GalleryName -ResourceGroupName $resourceGroup `
