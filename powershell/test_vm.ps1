@@ -1,7 +1,13 @@
+#Requires -RunAsAdministrator
+#Requires -PSEdition Core
+
+param(
+    [string] $VMAlias = "TEST",
+    [int] $VMNumber = 25
+)
+
 . .\common.ps1
 
-$VMAlias = "DEBUG"
-$VMNumber = 9
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
