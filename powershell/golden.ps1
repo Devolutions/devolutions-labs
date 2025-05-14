@@ -248,17 +248,25 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-DLabLog "Hiding taskbar search box and task view button"
+Write-DLabLog "Tweaking default taskbar and explorer settings"
 
 Invoke-Command -ScriptBlock {
     $DefaultUserReg = "HKLM\TempDefault"
     $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
     reg load $DefaultUserReg $NtuserDatPath
     $HKDU = "Registry::$DefaultUserReg"
-    $RegPath = "$HKDU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    New-Item -Path $RegPath -Force | Out-Null
-    Set-ItemProperty -Path $RegPath -Name "IsSearchBoxSettingEnabled" -Value 0 -Type DWORD
-    Set-ItemProperty -Path $RegPath -Name "ShowTaskViewButton" -Value 0 -Type DWORD
+    $RegExplorerPath = "$HKDU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    New-Item -Path $RegExplorerPath -Force | Out-Null
+    Set-ItemProperty -Path $RegExplorerPath -Name "IsSearchBoxSettingEnabled" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "ShowTaskViewButton" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "HideFileExt" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "Hidden" -Value 1 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "TaskbarDa" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "TaskbarMn" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "ShowCopilotButton" -Value 0 -Type DWORD
+    $RegSearchPath = "$HKDU\Software\Microsoft\Windows\CurrentVersion\Search"
+    New-Item -Path $RegSearchPath -Force | Out-Null
+    Set-ItemProperty -Path $RegSearchPath -Name "SearchboxTaskbarMode" -Value 0 -Type DWORD
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     reg unload $DefaultUserReg
@@ -326,7 +334,6 @@ if ($InstallChocolateyPackages) {
         'kdiff3',
         'filezilla',
         'wireshark',
-        'sysinternals',
         'sublimetext3',
         'notepadplusplus'
     )
@@ -493,6 +500,15 @@ Invoke-Command -ScriptBlock {
     Expand-Archive -Path ".\WinSpy_Release.zip" -DestinationPath ".\WinSpy_Release" -Force
     Copy-Item ".\WinSpy_Release\winspy.exe" "C:\tools\bin" -Force
     Remove-Item ".\WinSpy_Release*" -Recurse -Force
+} -Session $VMSession
+
+Write-Host "Installing Sysinternals Suite"
+
+Invoke-Command -ScriptBlock {
+    $ProgressPreference = "SilentlyContinue"
+    Invoke-WebRequest "https://download.sysinternals.com/files/SysinternalsSuite.zip" -OutFile "SysinternalsSuite.zip"
+    Expand-Archive -Path ".\SysinternalsSuite.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\SysinternalsSuite.zip"
 } -Session $VMSession
 
 Write-DLabLog "Installing Nirsoft tools"
