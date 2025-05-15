@@ -709,6 +709,37 @@ Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableVirtualizedGraphics' -Type DWORD -Value 1
 } -Session $VMSession
 
+Write-DLabLog "Changing Windows taskbar default pinned apps"
+
+Invoke-Command -ScriptBlock {
+    $LnkPaths = @(
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Microsoft Edge.lnk"
+        "%APPDATA%\Microsoft\Windows\Start Menu\Programs\File Explorer.lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Windows Terminal.lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\mstscex.lnk"
+    )
+    $OutputPath = "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml"
+    $xml = New-Object System.Xml.XmlDocument
+    $root = $xml.CreateElement("LayoutModificationTemplate", "http://schemas.microsoft.com/Start/2014/LayoutModification")
+    $xml.AppendChild($root) | Out-Null
+    $root.SetAttribute("xmlns:defaultlayout", "http://schemas.microsoft.com/Start/2014/FullDefaultLayout")
+    $root.SetAttribute("xmlns:taskbar", "http://schemas.microsoft.com/Start/2014/TaskbarLayout")
+    $root.SetAttribute("Version", "1")
+    $collection = $xml.CreateElement("CustomTaskbarLayoutCollection", $root.NamespaceURI)
+    $collection.SetAttribute("PinListPlacement", "Replace")
+    $root.AppendChild($collection) | Out-Null
+    $layout = $xml.CreateElement("defaultlayout:TaskbarLayout", $root.GetAttribute("xmlns:defaultlayout"))
+    $collection.AppendChild($layout) | Out-Null
+    $pinList = $xml.CreateElement("taskbar:TaskbarPinList", $root.GetAttribute("xmlns:taskbar"))
+    $layout.AppendChild($pinList) | Out-Null
+    foreach ($lnk in $LnkPaths) {
+        $desktopApp = $xml.CreateElement("taskbar:DesktopApp", $root.GetAttribute("xmlns:taskbar"))
+        $desktopApp.SetAttribute("DesktopApplicationLinkPath", $lnk)
+        $pinList.AppendChild($desktopApp) | Out-Null
+    }
+    $xml.Save($OutputPath)
+} -Session $VMSession
+
 if ($InstallSkillableServices) {
     Write-DLabLog "Installing Skillable Integration Services"
 

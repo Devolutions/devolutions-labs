@@ -77,3 +77,41 @@ Invoke-Command -ScriptBlock {
     Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$TempMsiPath`" /quiet /norestart" -Wait -NoNewWindow
     Remove-Item -Path $TempMsiPath -Force | Out-Null
 } -Session $VMSession
+
+Write-Host "Changing Windows taskbar default pinned apps"
+
+Invoke-Command -ScriptBlock {
+    $LnkPaths = @(
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Microsoft Edge.lnk"
+        "%APPDATA%\Microsoft\Windows\Start Menu\Programs\File Explorer.lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Remote Desktop Manager\Remote Desktop Manager (RDM).lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Windows Terminal.lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\mstscex.lnk"
+    )
+    $OutputPath = "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml"
+    $xml = New-Object System.Xml.XmlDocument
+    $root = $xml.CreateElement("LayoutModificationTemplate", "http://schemas.microsoft.com/Start/2014/LayoutModification")
+    $xml.AppendChild($root) | Out-Null
+    $root.SetAttribute("xmlns:defaultlayout", "http://schemas.microsoft.com/Start/2014/FullDefaultLayout")
+    $root.SetAttribute("xmlns:taskbar", "http://schemas.microsoft.com/Start/2014/TaskbarLayout")
+    $root.SetAttribute("Version", "1")
+    $collection = $xml.CreateElement("CustomTaskbarLayoutCollection", $root.NamespaceURI)
+    $collection.SetAttribute("PinListPlacement", "Replace")
+    $root.AppendChild($collection) | Out-Null
+    $layout = $xml.CreateElement("defaultlayout:TaskbarLayout", $root.GetAttribute("xmlns:defaultlayout"))
+    $collection.AppendChild($layout) | Out-Null
+    $pinList = $xml.CreateElement("taskbar:TaskbarPinList", $root.GetAttribute("xmlns:taskbar"))
+    $layout.AppendChild($pinList) | Out-Null
+    foreach ($lnk in $LnkPaths) {
+        $desktopApp = $xml.CreateElement("taskbar:DesktopApp", $root.GetAttribute("xmlns:taskbar"))
+        $desktopApp.SetAttribute("DesktopApplicationLinkPath", $lnk)
+        $pinList.AppendChild($desktopApp) | Out-Null
+    }
+    $xml.Save($OutputPath)
+    Remove-Item "$Env:AppData\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\*" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$Env:AppData\Microsoft\Windows\Shell\*.dat" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$Env:AppData\Microsoft\Windows\Shell\LayoutModification.xml" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Taskband" -Recurse -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\TrayNotify" -Name "IconStreams" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\TrayNotify" -Name "PastIconsStream" -ErrorAction SilentlyContinue
+} -Session $VMSession
