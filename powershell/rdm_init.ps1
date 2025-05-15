@@ -11,7 +11,7 @@ $Refresh = $true
 $ErrorActionPreference = "Stop"
 
 $LabName = "$LabPrefix-LAB"
-$VMAliases = @("DC", "DVLS", "GW", "WAC")
+$VMAliases = @("DC", "DVLS", "GW", "RDM")
 
 if ([string]::IsNullOrEmpty($DataSourceName)) {
     $DataSourceName = $LabName

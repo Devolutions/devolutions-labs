@@ -324,3 +324,66 @@ Invoke-Command -ScriptBlock { Param($KdcFQDN, $KdcPort)
 
     New-NetFirewallRule -DisplayName "Allow KDCProxy TCP $KdcPort" -Direction Inbound -Protocol TCP -LocalPort $KdcPort
 } -Session $VMSession -ArgumentList @($KdcFQDN, $KdcPort)
+
+Write-Host "Creating DNS record for Windows Admin Center"
+
+$DnsName = "wac"
+$WacFQDN = "$DnsName.$DomainName"
+$CertificateFile = "~\Documents\cert.pfx"
+$CertificatePassword = "cert123!"
+
+Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
+    Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+} -Session $VMSession -ArgumentList @($DnsName, $DomainName, $IPAddress, $DCHostName)
+
+Write-Host "Creating SPN for Windows Admin Center DNS name"
+
+$SpnAccountName = "$DomainNetbiosName\$VMName"
+
+Invoke-Command -ScriptBlock { Param($WacFQDN, $SpnAccountName)
+    & "setspn" "-A" "HTTP/$WacFQDN" $SpnAccountName
+} -Session $VMSession -ArgumentList @($WacFQDN, $SpnAccountName)
+
+Write-Host "Requesting certificate for Windows Admin Center"
+
+Request-DLabCertificate $VMName -VMSession $VMSession `
+    -CommonName $WacFQDN `
+    -CAHostName $CAHostName -CACommonName $CACommonName `
+    -CertificateFile $CertificateFile -Password $CertificatePassword
+
+Write-Host "Adding Windows Admin Center firewall exceptions"
+
+Invoke-Command -ScriptBlock {
+    $Params = @{
+        Profile = "Any";
+        LocalPort = 6516;
+        Protocol = "TCP";
+        Action = "Allow";
+        DisplayName = "Windows Admin Center";
+    }
+    New-NetFirewallRule -Direction Outbound @Params | Out-Null
+    New-NetFirewallRule -Direction Inbound @Params | Out-Null
+} -Session $VMSession
+
+Write-Host "Installing Windows Admin Center"
+
+# https://docs.microsoft.com/en-us/windows-server/manage/windows-admin-center/deploy/install
+
+Invoke-Command -ScriptBlock { Param($WacFQDN, $CertificateFile, $CertificatePassword)
+    $ProgressPreference = 'SilentlyContinue'
+    $WacMsi = "$(Resolve-Path ~)\Documents\WAC.msi"
+    #Invoke-WebRequest 'https://aka.ms/WACDownload' -OutFile $WacMsi
+    Invoke-WebRequest 'https://download.microsoft.com/download/1/0/5/1059800B-F375-451C-B37E-758FFC7C8C8B/WindowsAdminCenter2410.exe' -OutFile $WacMsi
+    $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
+    $Params = @{
+        FilePath          = $CertificateFile;
+        CertStoreLocation = "cert:\LocalMachine\My";
+        Password          = $CertificatePassword;
+        Exportable        = $true;
+    }
+    $Certificate = Import-PfxCertificate @Params
+    $Thumbprint = $Certificate.Thumbprint
+    $MsiArgs = @("/i", $WacMsi, "/qn", "/L*v", "log.txt",
+        "SME_PORT=6516", "SME_THUMBPRINT=$Thumbprint", "SSL_CERTIFICATE_OPTION=installed")
+    Start-Process msiexec.exe -Wait -ArgumentList $MsiArgs
+} -Session $VMSession -ArgumentList @($WacFQDN, $CertificateFile, $CertificatePassword)
