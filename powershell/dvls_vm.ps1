@@ -242,7 +242,6 @@ $DvlsPath = "C:\inetpub\dvlsroot"
 $DvlsAdminUsername = "dvls-admin"
 $DvlsAdminPassword = "dvls-admin123!"
 $DvlsAdminEmail = "admin@ad.it-help.ninja"
-$DvlsLicense = $licensing.DVLS
 
 $DvlsHostName = "dvls.$DomainName"
 $DvlsAccessUri = "https://$DvlsHostName"
@@ -374,7 +373,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
     $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
-    $DvlsAdminEmail, $DvlsLicense)
+    $DvlsAdminEmail)
 
     $ProgressPreference = 'SilentlyContinue'
     $DownloadBaseUrl = "https://cdn.devolutions.net/download"
@@ -425,10 +424,6 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
         $DvlsConsoleArgs += @("--disable-https")
     }
 
-    if (-Not [string]::IsNullOrEmpty($DvlsLicense)) {
-        $DvlsConsoleArgs += @('--serial', $DvlsLicense)
-    }
-
     $DvlsConsoleCli = "${Env:ProgramFiles}\Devolutions\Devolutions Server Console\DPS.Console.CLI.exe"
 
     Write-Host "& '$DvlsConsoleCli' $($DvlsConsoleArgs -Join ' ')"
@@ -439,4 +434,4 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
     $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
-    $DvlsAdminEmail, $DvlsLicense)
+    $DvlsAdminEmail)

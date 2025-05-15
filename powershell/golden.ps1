@@ -10,7 +10,9 @@ param(
     [string] $InputIsoPath = $null,
     [string] $OutputVhdxPath = $null,
     [bool] $InstallWindowsUpdates = $false,
-    [bool] $InstallChocolateyPackages = $true
+    [bool] $DisableWindowsUpdates = $true,
+    [bool] $InstallChocolateyPackages = $true,
+    [bool] $InstallSkillableServices = $false
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,7 +38,9 @@ Write-Host "`tVMName: $VMName"
 Write-Host "`tUserName: $UserName"
 Write-Host "`tPassword: $Password"
 Write-Host "`tInstallWindowsUpdates: $InstallWindowsUpdates"
+Write-Host "`tDisableWindowsUpdates: $DisableWindowsUpdates"
 Write-Host "`tInstallChocolateyPackages: $InstallChocolateyPackages"
+Write-Host "`tInstallSkillableServices: $InstallSkillableServices"
 Write-Host ""
 
 Write-DLabLog "Creating golden image"
@@ -214,7 +218,7 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-DLabLog "Disable Bing Search in Start Menu"
+Write-DLabLog "Disabling Bing Search in Start Menu"
 
 Invoke-Command -ScriptBlock {
     $DefaultUserReg = "HKLM\TempDefault"
@@ -229,7 +233,7 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-DLabLog "Hide 'Learn more about this picture' desktop icon"
+Write-DLabLog "Hiding 'Learn more about this picture' desktop icon"
 
 Invoke-Command -ScriptBlock {
     $DefaultUserReg = "HKLM\TempDefault"
@@ -244,23 +248,31 @@ Invoke-Command -ScriptBlock {
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-DLabLog "Hide taskbar search box and task view button"
+Write-DLabLog "Tweaking default taskbar and explorer settings"
 
 Invoke-Command -ScriptBlock {
     $DefaultUserReg = "HKLM\TempDefault"
     $NtuserDatPath = "C:\Users\Default\NTUSER.DAT"
     reg load $DefaultUserReg $NtuserDatPath
     $HKDU = "Registry::$DefaultUserReg"
-    $RegPath = "$HKDU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    New-Item -Path $RegPath -Force | Out-Null
-    Set-ItemProperty -Path $RegPath -Name "IsSearchBoxSettingEnabled" -Value 0 -Type DWORD
-    Set-ItemProperty -Path $RegPath -Name "ShowTaskViewButton" -Value 0 -Type DWORD
+    $RegExplorerPath = "$HKDU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    New-Item -Path $RegExplorerPath -Force | Out-Null
+    Set-ItemProperty -Path $RegExplorerPath -Name "IsSearchBoxSettingEnabled" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "ShowTaskViewButton" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "HideFileExt" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "Hidden" -Value 1 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "TaskbarDa" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "TaskbarMn" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegExplorerPath -Name "ShowCopilotButton" -Value 0 -Type DWORD
+    $RegSearchPath = "$HKDU\Software\Microsoft\Windows\CurrentVersion\Search"
+    New-Item -Path $RegSearchPath -Force | Out-Null
+    Set-ItemProperty -Path $RegSearchPath -Name "SearchboxTaskbarMode" -Value 0 -Type DWORD
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     reg unload $DefaultUserReg
 } -Session $VMSession
 
-Write-DLabLog "Remove Azure Arc setup with systray icon"
+Write-DLabLog "Removing Azure Arc setup with annoying tray icon"
 
 Invoke-Command -ScriptBlock {
     Remove-WindowsCapability -Online -Name AzureArcSetup~~~~
@@ -322,7 +334,6 @@ if ($InstallChocolateyPackages) {
         'kdiff3',
         'filezilla',
         'wireshark',
-        'sysinternals',
         'sublimetext3',
         'notepadplusplus'
     )
@@ -357,11 +368,22 @@ Invoke-Command -ScriptBlock {
     Remove-Item "OpenSSL.msi"
 } -Session $VMSession
 
-Write-DLabLog "Installing Windows Terminal"
+Write-DLabLog "Installing Devolutions MsRdpEx"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
-    $WtVersion = "1.18.2822.0"
+    $MsRdpExVersion = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/MsRdpEx/releases/latest").tag_name.TrimStart("v")
+    $MsRdpExUrl = "https://github.com/Devolutions/MsRdpEx/releases/download/v$MsRdpExVersion/MsRdpEx-$MsRdpExVersion-x64.msi"
+    Invoke-WebRequest -UseBasicParsing -Uri $MsRdpExUrl -OutFile "MsRdpEx.msi"
+    Start-Process msiexec.exe -Wait -ArgumentList @("/i", "MsRdpEx.msi", "/qn")
+    Remove-Item "MsRdpEx.msi"
+} -Session $VMSession
+
+Write-DLabLog "Installing Devolutions Windows Terminal"
+
+Invoke-Command -ScriptBlock {
+    $ProgressPreference = "SilentlyContinue"
+    $WtVersion = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/wt-distro/releases/latest").tag_name.TrimStart("v")
     $WtDownloadBase = "https://github.com/Devolutions/wt-distro/releases/download"
     $WtDownloadUrl = "$WtDownloadBase/v${WtVersion}/WindowsTerminal-${WtVersion}-x64.msi"
     Invoke-WebRequest -UseBasicParsing $WtDownloadUrl -OutFile "WindowsTerminal.msi"
@@ -480,6 +502,15 @@ Invoke-Command -ScriptBlock {
     Remove-Item ".\WinSpy_Release*" -Recurse -Force
 } -Session $VMSession
 
+Write-Host "Installing Sysinternals Suite"
+
+Invoke-Command -ScriptBlock {
+    $ProgressPreference = "SilentlyContinue"
+    Invoke-WebRequest "https://download.sysinternals.com/files/SysinternalsSuite.zip" -OutFile "SysinternalsSuite.zip"
+    Expand-Archive -Path ".\SysinternalsSuite.zip" -DestinationPath "C:\tools\bin" -Force
+    Remove-Item ".\SysinternalsSuite.zip"
+} -Session $VMSession
+
 Write-DLabLog "Installing Nirsoft tools"
 
 Invoke-Command -ScriptBlock {
@@ -577,13 +608,19 @@ Invoke-Command -ScriptBlock {
     New-ItemProperty -Path $RegPath -Name ImportEnterpriseRoots -Value 1 -Force | Out-Null
 } -Session $VMSession
 
-Write-DLabLog "Disable Microsoft Edge first run experience"
+Write-DLabLog "Disabling Microsoft Edge first run experience"
 
 Invoke-Command -ScriptBlock {
     $RegPath = "HKLM:\Software\Policies\Microsoft\Edge"
     New-Item -Path $RegPath -Force | Out-Null
     New-ItemProperty -Path $RegPath -Name "HideFirstRunExperience" -Value 1 -Force | Out-Null
     New-ItemProperty -Path $RegPath -Name "NewTabPageLocation" -Value "https://www.google.com" -Force | Out-Null
+} -Session $VMSession
+
+Write-DLabLog "Disabling Secure Time Seeding (STS) problematic feature"
+
+Invoke-Command -ScriptBlock {
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config" -Name "UtilizeSslTimeData" -Value 0 -Type DWORD
 } -Session $VMSession
 
 Write-DLabLog "Installing Remote Server Administration DNS tools"
@@ -672,6 +709,58 @@ Invoke-Command -ScriptBlock {
     Set-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services' -Name 'fEnableVirtualizedGraphics' -Type DWORD -Value 1
 } -Session $VMSession
 
+Write-DLabLog "Changing Windows taskbar default pinned apps"
+
+Invoke-Command -ScriptBlock {
+    $LnkPaths = @(
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Microsoft Edge.lnk"
+        "%APPDATA%\Microsoft\Windows\Start Menu\Programs\File Explorer.lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\Windows Terminal.lnk"
+        "%ALLUSERSPROFILE%\Microsoft\Windows\Start Menu\Programs\mstscex.lnk"
+    )
+    $OutputPath = "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml"
+    $xml = New-Object System.Xml.XmlDocument
+    $root = $xml.CreateElement("LayoutModificationTemplate", "http://schemas.microsoft.com/Start/2014/LayoutModification")
+    $xml.AppendChild($root) | Out-Null
+    $root.SetAttribute("xmlns:defaultlayout", "http://schemas.microsoft.com/Start/2014/FullDefaultLayout")
+    $root.SetAttribute("xmlns:taskbar", "http://schemas.microsoft.com/Start/2014/TaskbarLayout")
+    $root.SetAttribute("Version", "1")
+    $collection = $xml.CreateElement("CustomTaskbarLayoutCollection", $root.NamespaceURI)
+    $collection.SetAttribute("PinListPlacement", "Replace")
+    $root.AppendChild($collection) | Out-Null
+    $layout = $xml.CreateElement("defaultlayout:TaskbarLayout", $root.GetAttribute("xmlns:defaultlayout"))
+    $collection.AppendChild($layout) | Out-Null
+    $pinList = $xml.CreateElement("taskbar:TaskbarPinList", $root.GetAttribute("xmlns:taskbar"))
+    $layout.AppendChild($pinList) | Out-Null
+    foreach ($lnk in $LnkPaths) {
+        $desktopApp = $xml.CreateElement("taskbar:DesktopApp", $root.GetAttribute("xmlns:taskbar"))
+        $desktopApp.SetAttribute("DesktopApplicationLinkPath", $lnk)
+        $pinList.AppendChild($desktopApp) | Out-Null
+    }
+    $xml.Save($OutputPath)
+} -Session $VMSession
+
+if ($InstallSkillableServices) {
+    Write-DLabLog "Installing Skillable Integration Services"
+
+    Invoke-Command -ScriptBlock {
+        $ProgressPreference = 'SilentlyContinue'
+        $RepoName = "Skillable-Integration-Service"
+        $ZipFile = "${RepoName}.zip"
+        $DownloadUrl = "https://github.com/LearnOnDemandSystems/${RepoName}/archive/refs/heads/main.zip"
+        $OutputPath = Join-Path $Env:TEMP "${RepoName}-main"
+        Remove-Item $OutputPath -Recurse -ErrorAction SilentlyContinue | Out-Null
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $ZipFile
+        Expand-Archive -Path $ZipFile -DestinationPath $Env:TEMP
+        Remove-Item $ZipFile | Out-Null
+        Remove-Item "C:\VmIntegrationService" -Recurse -ErrorAction SilentlyContinue | Out-Null
+        Expand-Archive "$OutputPath\VmIntegrationService.zip" -DestinationPath "C:\VmIntegrationService"
+        Unblock-File "$OutputPath\install.ps1"
+        & "$OutputPath\install.ps1"
+        Remove-Item $OutputPath -Recurse | Out-Null
+    } -Session $VMSession
+}
+
 Write-DLabLog "Rebooting VM"
 
 Invoke-Command -ScriptBlock {
@@ -724,13 +813,15 @@ Invoke-Command -ScriptBlock {
     & dism.exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase
 } -Session $VMSession
 
-Write-DLabLog "Disabling Windows Update service permanently"
+if ($DisableWindowsUpdates) {
+    Write-DLabLog "Disabling Windows Update service permanently"
 
-Invoke-Command -ScriptBlock {
-    Stop-service wuauserv | Set-Service -StartupType Disabled
-    New-Item -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -Force | Out-Null
-    Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name NoAutoUpdate -Value 1 -Type DWORD
-} -Session $VMSession
+    Invoke-Command -ScriptBlock {
+        Stop-service wuauserv | Set-Service -StartupType Disabled
+        New-Item -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -Force | Out-Null
+        Set-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name NoAutoUpdate -Value 1 -Type DWORD
+    } -Session $VMSession
+}
 
 Write-DLabLog "Running sysprep to generalize the image for OOBE experience and shut down VM"
 
