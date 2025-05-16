@@ -27,6 +27,12 @@ You can now install Hyper-V including the management tools (very important!). Ma
 Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -NoRestart
 ```
 
+On Windows Server, the command is slightly different:
+
+```powershell
+Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
+```
+
 In order to use Hyper-V from an unelevated shell, add yourself to the local Hyper-V Administrators group:
 
 ```powershell
