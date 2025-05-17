@@ -143,7 +143,8 @@ if ($SwitchName -eq "NAT Switch") {
     Set-DLabVMNetAdapter $VMName -VMSession $VMSession `
         -SwitchName $SwitchName -NetAdapterName "vEthernet (LAN)" `
         -IPAddress "10.9.0.249" -DefaultGateway "10.9.0.1" `
-        -DnsServerAddress "1.1.1.1"
+        -DnsServerAddress "1.1.1.1" `
+        -RegisterAutomaticFix $false
 }
 
 Write-DLabLog "Testing Internet connectivity"
@@ -328,6 +329,7 @@ if ($InstallChocolateyPackages) {
         'gsudo',
         'ripgrep',
         'nssm',
+        'azcopy10'
         'firefox',
         'microsoft-edge',
         'vscode',
@@ -502,7 +504,7 @@ Invoke-Command -ScriptBlock {
     Remove-Item ".\WinSpy_Release*" -Recurse -Force
 } -Session $VMSession
 
-Write-Host "Installing Sysinternals Suite"
+Write-DLabLog "Installing Sysinternals Suite"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
