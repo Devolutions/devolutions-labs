@@ -903,7 +903,8 @@ function Set-DLabVMNetAdapter
         [Parameter(Mandatory=$true)]
         [string] $DefaultGateway,
         [Parameter(Mandatory=$true)]
-        [string] $DnsServerAddress
+        [string] $DnsServerAddress,
+        [bool] $RegisterAutomaticFix = $true
     )
 
     $VMHostAdapters = Get-VMNetworkAdapter $VMName
@@ -911,7 +912,7 @@ function Set-DLabVMNetAdapter
     $MacAddress = $Switch.MacAddress -Split '(.{2})' -Match '.' -Join '-'
 
     Invoke-Command -ScriptBlock { Param($MacAddress, $NetAdapterName,
-        $IPAddress, $DefaultGateway, $DnsServerAddress)
+        $IPAddress, $DefaultGateway, $DnsServerAddress, $RegisterAutomaticFix)
         $NetAdapter = Get-NetAdapter | Where-Object { $_.MacAddress -Like $MacAddress }
         Rename-NetAdapter -Name $NetAdapter.Name -NewName $NetAdapterName
         $Params = @{
@@ -924,8 +925,19 @@ function Set-DLabVMNetAdapter
         New-NetIPAddress @Params
         Set-DnsClientServerAddress -InterfaceAlias $NetAdapterName -ServerAddresses $DnsServerAddress
         Start-Sleep 5
+
+        if ($RegisterAutomaticFix) {
+            $IPAddressMatch = $IPAddress -replace '(\d+\.\d+\.\d+)\.\d+', '$1.*'
+            $TaskName = "Fix-HyperVNetworkAdapters"
+            $ScriptPath = "C:\tools\scripts\Fix-HyperVNetworkAdapters.ps1"
+            $ArgString = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`" -IPAddressMatch `"$IPAddressMatch`""
+            $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ArgString
+            $Trigger = New-ScheduledTaskTrigger -AtStartup
+            $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+            Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal
+        }
     } -Session $VMSession -ArgumentList @($MacAddress, $NetAdapterName,
-        $IPAddress, $DefaultGateway, $DnsServerAddress)
+        $IPAddress, $DefaultGateway, $DnsServerAddress, $RegisterAutomaticFix)
 }
 
 function Add-DLabVMToDomain
