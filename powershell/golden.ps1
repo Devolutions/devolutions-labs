@@ -12,7 +12,7 @@ param(
     [bool] $InstallWindowsUpdates = $false,
     [bool] $DisableWindowsUpdates = $true,
     [bool] $InstallChocolateyPackages = $true,
-    [bool] $InstallSkillableServices = $false
+    [bool] $InstallSkillableServices = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -321,9 +321,24 @@ Invoke-Command -ScriptBlock {
     choco install -y --no-progress netfx-4.8
 } -Session $VMSession
 
+Write-DLabLog "Installing git"
+
+Invoke-Command -ScriptBlock {
+    $GitReleaseApi = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+    $GitRelease = Invoke-RestMethod -Uri $GitReleaseApi -Headers @{ "User-Agent" = "PowerShell" }
+    $GitArchSuffix = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { "arm64" } else { "64-bit" }
+    $Asset = $GitRelease.assets | Where-Object { $_.name -match "^Git-[\d\.]+-$GitArchSuffix\.exe$" } | Select-Object -First 1
+    $InstallerUrl = $Asset.browser_download_url
+    $InstallerPath = Join-Path $Env:TEMP $($Asset.name)
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $InstallerUrl -OutFile $InstallerPath
+    $InstallerArgs = @("/VERYSILENT", "/NORESTART", "/NOCANCEL", "/COMPONENTS=gitlfs,assoc,assoc_sh,ext,path")
+    Start-Process -FilePath $InstallerPath -ArgumentList $InstallerArgs -Wait
+    Remove-Item $InstallerPath -Force
+} -Session $VMSession
+
 if ($InstallChocolateyPackages) {
     $Packages = @(
-        'git.install',
         'vlc',
         '7zip',
         'gsudo',
@@ -663,6 +678,7 @@ Invoke-Command -ScriptBlock {
     Install-Module -Name PsHosts -Scope AllUsers
     Install-Module -Name Posh-ACME -Scope AllUsers
     Install-Module -Name PSWindowsUpdate -Scope AllUsers
+    Install-Module -Name Evergreen -Scope AllUsers -Force
     Install-Module -Name PSDetour -Scope AllUsers -Force
     Install-Module -Name AwakeCoding.DebugTools -Scope AllUsers -Force
     Install-Module -Name Microsoft.PowerShell.SecretManagement -Scope AllUsers
