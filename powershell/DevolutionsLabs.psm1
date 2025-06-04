@@ -617,6 +617,8 @@ function New-DLabVM
         [Int64] $ProcessorCount = 4,
         [Parameter(Mandatory=$true)]
         [string] $OSVersion,
+        [bool] $DynamicMemory = $true,
+        [bool] $EnableVirtualization = $false,
         [switch] $Force
     )
 
@@ -665,15 +667,29 @@ function New-DLabVM
 
     New-VM @Params
 
+    if ($EnableVirtualization) {
+        Set-VMProcessor -VMName $Name -ExposeVirtualizationExtensions $EnableVirtualization
+    }
+
+    if ($DynamicMemory) {
+        $MemoryStartupBytes = ([math]::Floor(($MemoryBytes / 1MB * 0.8) / 2) * 2) * 1MB
+        $MemoryMinimumBytes = $MemoryStartupBytes
+        $MemoryMaximumBytes = $MemoryBytes
+    } else {
+        $MemoryStartupBytes = $MemoryBytes
+        $MemoryMinimumBytes = $MemoryBytes
+        $MemoryMaximumBytes = $MemoryBytes
+    }
+
     $Params = @{
         Name = $Name;
         ProcessorCount = $ProcessorCount;
         AutomaticStopAction = "Shutdown";
         CheckpointType = "Disabled";
-        DynamicMemory = $true;
-        MemoryStartupBytes = [Int64] ($MemoryBytes * 80 / 100);
-        MemoryMinimumBytes = [Int64] ($MemoryBytes * 80 / 100);
-        MemoryMaximumBytes = $MemoryBytes;
+        DynamicMemory = $DynamicMemory;
+        MemoryStartupBytes = $MemoryStartupBytes;
+        MemoryMinimumBytes = $MemoryMinimumBytes;
+        MemoryMaximumBytes = $MemoryMaximumBytes;
     }
 
     Set-VM @Params
