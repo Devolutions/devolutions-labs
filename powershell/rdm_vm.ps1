@@ -51,16 +51,42 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing .NET Desktop Runtime"
 
 Invoke-Command -ScriptBlock {
-    # https://dotnet.microsoft.com/en-us/download/dotnet/9.0
-    $DotNetDesktopRuntimeFileName = "windowsdesktop-runtime-9.0.4-win-x64.exe"
-    $DotNetDesktopRuntimeFileUrl = "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/9.0.4/$DotNetDesktopRuntimeFileName"
-    $DotNetDesktopRuntimeFileSHA512 = 'c277fe5434b66c05f7782d40b90ab04dd2a9ac3d1570b2ab96a2311a58aeefff27761ca4488aadebe3b897e961b24b2f9c5a597ee27c2c4387d3cf0833f6cc48'
+    $MajorVersion = "9.0"
+    $RuntimeType = "windowsdesktop"
+    $Architecture = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { "win-arm64" } else { "win-x64" }
+    $ReleasesJsonUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$MajorVersion/releases.json"
+    $ReleasesData = Invoke-RestMethod -Uri $ReleasesJsonUrl
+
+    $LatestReleaseWithDesktop = $ReleasesData.releases |
+        Where-Object { $_.windowsdesktop -and $_.windowsdesktop.files } |
+        Sort-Object -Property 'release-date' -Descending | Select-Object -First 1
+
+    if (-not $LatestReleaseWithDesktop) {
+        throw "Could not find any releases with $RuntimeType runtime."
+    }
+
+    $DesktopRuntimeVersion = $LatestReleaseWithDesktop.windowsdesktop.version
+    $DesktopRuntimeFiles = $LatestReleaseWithDesktop.windowsdesktop.files
+    $Installer = $DesktopRuntimeFiles | Where-Object {
+        $_.rid -eq $Architecture -and $_.name -like "$RuntimeType-runtime-*-*.exe"
+    } | Select-Object -First 1
+
+    if (-not $Installer) {
+        throw "Could not find $RuntimeType runtime installer for $Architecture"
+    }
+
+    $DownloadUrl = $Installer.url
+    $ExpectedFileHash = $Installer.hash
+    $InstallerFileName = Split-Path -Leaf $DownloadUrl
+    $InstallerLocalPath = Join-Path $Env:TEMP $InstallerFileName
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest $DotNetDesktopRuntimeFileUrl -OutFile "${Env:TEMP}\$DotNetDesktopRuntimeFileName"
-    $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetDesktopRuntimeFileName").Hash
-    if ($DotNetDesktopRuntimeFileSHA512 -ine $FileHash) { throw "unexpected SHA512 file hash for $DotNetDesktopRuntimeFileName`: $DotNetDesktopRuntimeFileSHA512" }
-    Start-Process -FilePath "${Env:TEMP}\$DotNetDesktopRuntimeFileName" -ArgumentList @('/install', '/quiet', '/norestart', 'OPT_NO_X86=1') -Wait -NoNewWindow
-    Remove-Item "${Env:TEMP}\$DotNetDesktopRuntimeFileName" -Force | Out-Null
+    Invoke-WebRequest $DownloadUrl -OutFile $InstallerLocalPath
+    $ActualFileHash = (Get-FileHash -Algorithm SHA512 $InstallerLocalPath).Hash
+    if ($ExpectedFileHash -ine $ActualFileHash) { throw "Unexpected SHA512 file hash for $InstallerFileName`: $ActualFileHash" }
+    Start-Process -FilePath $InstallerLocalPath -ArgumentList @('/install', '/quiet', '/norestart', 'OPT_NO_X86=1') -Wait -NoNewWindow
+    Remove-Item $InstallerLocalPath -Force | Out-Null
+
+    Write-Host ".NET $RuntimeType runtime $DesktopRuntimeVersion installed successfully."
 } -Session $VMSession
 
 Write-Host "Installing Devolutions Remote Desktop Manager"
@@ -68,7 +94,8 @@ Write-Host "Installing Devolutions Remote Desktop Manager"
 Invoke-Command -ScriptBlock {
     $ProductsHtm = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.htm" -Method 'GET' -ContentType 'text/plain'
     $RdmMatches = $($ProductsHtm | Select-String -AllMatches -Pattern "(RDM\S+).Url=(\S+)").Matches
-    $RdmWindows = $RdmMatches | Where-Object { $_.Groups[1].Value -eq 'RDMmsi' }
+    $RdmKeyName = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { "RDMmsiArm" } else { "RDMmsiX64" }
+    $RdmWindows = $RdmMatches | Where-Object { $_.Groups[1].Value -eq $RdmKeyName }
     $RdmDownloadUrl = $RdmWindows.Groups[2].Value
     $RdmFileName = [System.IO.Path]::GetFileName($RdmDownloadUrl)
     $TempMsiPath = Join-Path $env:TEMP $RdmFileName
