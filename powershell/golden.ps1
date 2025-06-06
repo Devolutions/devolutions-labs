@@ -381,7 +381,8 @@ Invoke-Command -ScriptBlock {
         throw "Unexpected OpenSSL file hash: actual: $FileHash, expected: $openssl_file_hash"
     }
     Start-Process msiexec.exe -Wait -ArgumentList @("/i", "OpenSSL.msi", "/qn")
-    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};${Env:ProgramFiles}\OpenSSL-Win64\bin", "Machine")
+    $SystemPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    [Environment]::SetEnvironmentVariable("PATH", "$SystemPath;C:\Program Files\OpenSSL-Win64\bin", "Machine")
     Remove-Item "OpenSSL.msi"
 } -Session $VMSession
 
@@ -497,7 +498,8 @@ Invoke-Command -ScriptBlock {
     New-Item -ItemType Directory -Path "C:\tools\bin" -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "C:\tools\scripts" -ErrorAction SilentlyContinue | Out-Null
     New-Item -ItemType Directory -Path "C:\tools\installers" -ErrorAction SilentlyContinue | Out-Null
-    [Environment]::SetEnvironmentVariable("PATH", "${Env:PATH};C:\tools\bin", "Machine")
+    $SystemPath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+    [Environment]::SetEnvironmentVariable("PATH", "$SystemPath;C:\tools\bin", "Machine")
     Set-Location "C:\tools\installers"
     Invoke-WebRequest 'https://npcap.com/dist/npcap-1.78.exe' -OutFile "npcap-1.78.exe"
     Invoke-WebRequest 'http://update.youngzsoft.com/ccproxy/update/ccproxysetup.exe' -OutFile "CCProxySetup.exe"
