@@ -268,6 +268,7 @@ Invoke-Command -ScriptBlock {
     $RegSearchPath = "$HKDU\Software\Microsoft\Windows\CurrentVersion\Search"
     New-Item -Path $RegSearchPath -Force | Out-Null
     Set-ItemProperty -Path $RegSearchPath -Name "SearchboxTaskbarMode" -Value 0 -Type DWORD
+    Set-ItemProperty -Path $RegSearchPath -Name "SearchboxTaskbarModeCache" -Value 1 -Type DWORD
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     reg unload $DefaultUserReg
