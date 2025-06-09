@@ -6,6 +6,8 @@
 $VMAlias = "DC"
 $VMName = $LabPrefix, $VMAlias -Join "-"
 
+Start-VM -Name $VMName
+Wait-DLabVM $VMName 'Heartbeat' -Timeout 600 -UserName $DomainUserName -Password $DomainPassword
 $VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword
 
 # Synchronize DNS records with hosts file

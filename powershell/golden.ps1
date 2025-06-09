@@ -694,6 +694,7 @@ Invoke-Command -ScriptBlock {
     Install-Module -Name Microsoft.PowerShell.RemotingTools -Scope AllUsers -Force
     Set-Service -Name sshd -StartupType 'Automatic'
     Start-Service sshd
+    Set-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -Profile Any -Enabled True
 } -Session $VMSession
 
 $VMSession = New-DLabVMSession $VMName -UserName $UserName -Password $Password
