@@ -17,28 +17,36 @@
                     <CreatePartitions>
                         <CreatePartition wcm:action="add">
                             <Order>1</Order>
-                            <Size>250</Size>
-                            <Type>Primary</Type>
+                            <Size>100</Size>
+                            <Type>EFI</Type>
                         </CreatePartition>
                         <CreatePartition wcm:action="add">
                             <Order>2</Order>
+                            <Size>16</Size>
+                            <Type>MSR</Type>
+                        </CreatePartition>
+                        <CreatePartition wcm:action="add">
+                            <Order>3</Order>
                             <Extend>true</Extend>
                             <Type>Primary</Type>
                         </CreatePartition>
                     </CreatePartitions>
                     <ModifyPartitions>
                         <ModifyPartition wcm:action="add">
-                            <Order>1</Order>
                             <PartitionID>1</PartitionID>
-                            <Format>NTFS</Format>
-                            <Label>Boot</Label>
-                            <Active>true</Active>
+                            <Order>1</Order>
+                            <Format>FAT32</Format>
                         </ModifyPartition>
                         <ModifyPartition wcm:action="add">
                             <Order>2</Order>
                             <PartitionID>2</PartitionID>
+                        </ModifyPartition>
+                        <ModifyPartition wcm:action="add">
+                            <Order>3</Order>
+                            <PartitionID>3</PartitionID>
+                            <Label>Windows</Label>
                             <Format>NTFS</Format>
-                            <Label>System</Label>
+                            <Letter>C</Letter>
                         </ModifyPartition>
                     </ModifyPartitions>
                     <DiskID>0</DiskID>
