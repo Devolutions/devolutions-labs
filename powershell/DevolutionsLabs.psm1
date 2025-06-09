@@ -308,11 +308,12 @@ function New-DLabParentDisk
 function New-DLabChildDisk
 {
     [CmdletBinding()]
-	param(
+    param(
         [Parameter(Mandatory=$true,Position=0)]
         [string] $Name,
         [Parameter(Mandatory=$true,Position=1)]
         [string] $ParentDiskPath,
+        [bool] $CloneParentDisk = $false,
         [switch] $Force
     )
 
@@ -326,13 +327,20 @@ function New-DLabChildDisk
 
     if (Test-Path $ChildDiskPath -PathType 'Leaf') {
         if ($Force) {
+            (Get-Item $ChildDiskPath).IsReadOnly = $false
             Remove-Item -Path $ChildDiskPath
         } else {
             throw "`"$ChildDiskPath`" already exists!"
         }
     }
 
-    New-VHD -Path $ChildDiskPath -ParentPath $ParentDiskPath -Differencing
+    if ($CloneParentDisk) {
+        Copy-Item $ParentDiskPath $ChildDiskPath -Force
+        (Get-Item $ChildDiskPath).IsReadOnly = $false
+        Get-VHD $ChildDiskPath
+    } else {
+        New-VHD -Path $ChildDiskPath -ParentPath $ParentDiskPath -Differencing
+    }
 }
 
 function Test-DLabVM
@@ -619,6 +627,7 @@ function New-DLabVM
         [string] $OSVersion,
         [bool] $DynamicMemory = $true,
         [bool] $EnableVirtualization = $false,
+        [bool] $CloneParentDisk = $false,
         [switch] $Force
     )
 
@@ -633,7 +642,7 @@ function New-DLabVM
 
     $ParentDiskPath = Get-DLabParentDiskFilePath "Windows Server ${OSVersion} Standard"
 
-    $ChildDisk = New-DLabChildDisk $Name -ParentDiskPath $ParentDiskPath -Force:$Force
+    $ChildDisk = New-DLabChildDisk $Name -ParentDiskPath $ParentDiskPath -CloneParentDisk:$CloneParentDisk -Force:$Force
 
     $MountedDisk = Mount-VHD -Path $ChildDisk.Path -PassThru
 

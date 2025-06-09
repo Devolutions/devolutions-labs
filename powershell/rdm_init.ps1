@@ -1,6 +1,8 @@
 param(
     [Parameter(Position=0)]
-    [string] $DataSourceName
+    [string] $DataSourceName,
+    [string] $LabName,
+    [string[]] $VMAliases
 )
 
 . .\common.ps1
@@ -10,8 +12,13 @@ Import-Module Devolutions.PowerShell -Force
 $Refresh = $true
 $ErrorActionPreference = "Stop"
 
-$LabName = "$LabPrefix-LAB"
-$VMAliases = @("DC", "DVLS", "GW", "RDM")
+if (-not $LabName) {
+    $LabName = "$LabPrefix-LAB"
+}
+
+if (-not $VMAliases) {
+    $VMAliases = @("DC", "DVLS", "GW")
+}
 
 if ([string]::IsNullOrEmpty($DataSourceName)) {
     $DataSourceName = $LabName
@@ -342,6 +349,7 @@ $VMAliases | ForEach-Object {
     $Session.CredentialConnectionID = $DomainAdminId
     $Session.Terminal.Host = $MachineFQDN
     $Session.Terminal.HostPort = 22
+    $Session.UserNameFormat = "UPN"
     Set-RDMSession -Session $Session -Refresh:$Refresh
 }
 
