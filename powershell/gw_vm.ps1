@@ -1,5 +1,7 @@
 . .\common.ps1
 
+$InstallWindowsAdminCenter = $false
+
 $VMAlias = "GW"
 $VMNumber = 7
 $VMName = $LabPrefix, $VMAlias -Join "-"
@@ -325,55 +327,38 @@ Invoke-Command -ScriptBlock { Param($KdcFQDN, $KdcPort)
     New-NetFirewallRule -DisplayName "Allow KDCProxy TCP $KdcPort" -Direction Inbound -Protocol TCP -LocalPort $KdcPort
 } -Session $VMSession -ArgumentList @($KdcFQDN, $KdcPort)
 
-Write-Host "Creating DNS record for Windows Admin Center"
+Write-Host "Creating DNS record for PowerShell Universal"
 
-$DnsName = "wac"
-$WacFQDN = "$DnsName.$DomainName"
-$CertificateFile = "~\Documents\cert.pfx"
-$CertificatePassword = "cert123!"
+$DnsName = "psu"
+$PsuFQDN = "$DnsName.$DomainName"
+$PsuPort = 5151
+$PsuCertificateFile = "~\Documents\psu-cert.pfx"
+$PsuCertificatePassword = "cert123!"
+
+$VMSession = New-DLabVMSession $VMName -UserName $DomainUserName -Password $DomainPassword -ConfigurationName "PowerShell.7"
 
 Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
     Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
 } -Session $VMSession -ArgumentList @($DnsName, $DomainName, $IPAddress, $DCHostName)
 
-Write-Host "Creating SPN for Windows Admin Center DNS name"
+Write-Host "Creating SPN for PowerShell Universal DNS name"
 
 $SpnAccountName = "$DomainNetbiosName\$VMName"
 
-Invoke-Command -ScriptBlock { Param($WacFQDN, $SpnAccountName)
-    & "setspn" "-A" "HTTP/$WacFQDN" $SpnAccountName
-} -Session $VMSession -ArgumentList @($WacFQDN, $SpnAccountName)
+Invoke-Command -ScriptBlock { Param($FQDN, $SpnAccountName)
+    & "setspn" "-A" "HTTP/$FQDN" $SpnAccountName
+} -Session $VMSession -ArgumentList @($PsuFQDN, $SpnAccountName)
 
-Write-Host "Requesting certificate for Windows Admin Center"
+Write-Host "Requesting certificate for PowerShell Universal"
 
 Request-DLabCertificate $VMName -VMSession $VMSession `
-    -CommonName $WacFQDN `
+    -CommonName $PsuFQDN `
     -CAHostName $CAHostName -CACommonName $CACommonName `
-    -CertificateFile $CertificateFile -Password $CertificatePassword
+    -CertificateFile $PsuCertificateFile -Password $PsuCertificatePassword
 
-Write-Host "Adding Windows Admin Center firewall exceptions"
+Write-Host "Installing PowerShell Universal"
 
-Invoke-Command -ScriptBlock {
-    $Params = @{
-        Profile = "Any";
-        LocalPort = 6516;
-        Protocol = "TCP";
-        Action = "Allow";
-        DisplayName = "Windows Admin Center";
-    }
-    New-NetFirewallRule -Direction Outbound @Params | Out-Null
-    New-NetFirewallRule -Direction Inbound @Params | Out-Null
-} -Session $VMSession
-
-Write-Host "Installing Windows Admin Center"
-
-# https://docs.microsoft.com/en-us/windows-server/manage/windows-admin-center/deploy/install
-
-Invoke-Command -ScriptBlock { Param($WacFQDN, $CertificateFile, $CertificatePassword)
-    $ProgressPreference = 'SilentlyContinue'
-    $WacMsi = "$(Resolve-Path ~)\Documents\WAC.msi"
-    #Invoke-WebRequest 'https://aka.ms/WACDownload' -OutFile $WacMsi
-    Invoke-WebRequest 'https://download.microsoft.com/download/1/0/5/1059800B-F375-451C-B37E-758FFC7C8C8B/WindowsAdminCenter2410.exe' -OutFile $WacMsi
+Invoke-Command -ScriptBlock { Param($FQDN, $Port, $CertificateFile, $CertificatePassword)
     $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
     $Params = @{
         FilePath          = $CertificateFile;
@@ -382,8 +367,136 @@ Invoke-Command -ScriptBlock { Param($WacFQDN, $CertificateFile, $CertificatePass
         Exportable        = $true;
     }
     $Certificate = Import-PfxCertificate @Params
+
+    Install-Module Universal -Scope AllUsers -Force
+    Install-PSUServer
+
+    $AppSettingsPath = "$Env:ProgramData\PowerShellUniversal\appsettings.json"
+
+    $Certificate = Get-ChildItem -Path Cert:\LocalMachine\My |
+        Where-Object { $_.DnsNameList -match $FQDN -and $_.HasPrivateKey } |
+        Sort-Object NotAfter -Descending |
+        Select-Object -First 1
+
     $Thumbprint = $Certificate.Thumbprint
-    $MsiArgs = @("/i", $WacMsi, "/qn", "/L*v", "log.txt",
-        "SME_PORT=6516", "SME_THUMBPRINT=$Thumbprint", "SSL_CERTIFICATE_OPTION=installed")
-    Start-Process msiexec.exe -Wait -ArgumentList $MsiArgs
-} -Session $VMSession -ArgumentList @($WacFQDN, $CertificateFile, $CertificatePassword)
+    $appSettings = Get-Content $AppSettingsPath -Raw | ConvertFrom-Json
+    $appSettings.Kestrel.Endpoints = [ordered]@{
+        HTTPS = @{
+            Url = "https://${FQDN}:${Port}"
+            Certificate = @{
+                Store      = "My"
+                Location   = "LocalMachine"
+                Thumbprint = $Thumbprint
+            }
+        }
+    }
+    $appSettings | ConvertTo-Json -Depth 10 | Set-Content -Path $AppSettingsPath -Encoding UTF8
+
+    Restart-Service -Name PowerShellUniversal -Force
+} -Session $VMSession -ArgumentList @($PsuFQDN, $PsuPort, $PsuCertificateFile, $PsuCertificatePassword)
+
+if ($InstallWindowsAdminCenter) {
+    Write-Host "Creating DNS record for Windows Admin Center"
+
+    $DnsName = "wac"
+    $WacFQDN = "$DnsName.$DomainName"
+    $WacCertificateFile = "~\Documents\wac-cert.pfx"
+    $WacCertificatePassword = "cert123!"
+
+    Invoke-Command -ScriptBlock { Param($DnsName, $DnsZoneName, $IPAddress, $DnsServer)
+        Add-DnsServerResourceRecordA -Name $DnsName -ZoneName $DnsZoneName -IPv4Address $IPAddress -AllowUpdateAny -ComputerName $DnsServer
+    } -Session $VMSession -ArgumentList @($DnsName, $DomainName, $IPAddress, $DCHostName)
+
+    Write-Host "Creating SPN for Windows Admin Center DNS name"
+
+    $SpnAccountName = "$DomainNetbiosName\$VMName"
+
+    Invoke-Command -ScriptBlock { Param($WacFQDN, $SpnAccountName)
+        & "setspn" "-A" "HTTP/$WacFQDN" $SpnAccountName
+    } -Session $VMSession -ArgumentList @($WacFQDN, $SpnAccountName)
+
+    Write-Host "Requesting certificate for Windows Admin Center"
+
+    Request-DLabCertificate $VMName -VMSession $VMSession `
+        -CommonName $WacFQDN `
+        -CAHostName $CAHostName -CACommonName $CACommonName `
+        -CertificateFile $WacCertificateFile -Password $WacCertificatePassword
+
+    Write-Host "Adding Windows Admin Center firewall exceptions"
+
+    Invoke-Command -ScriptBlock {
+        $Params = @{
+            Profile = "Any";
+            LocalPort = 6516;
+            Protocol = "TCP";
+            Action = "Allow";
+            DisplayName = "Windows Admin Center";
+        }
+        New-NetFirewallRule -Direction Outbound @Params | Out-Null
+        New-NetFirewallRule -Direction Inbound @Params | Out-Null
+    } -Session $VMSession
+
+    Write-Host "Installing Windows Admin Center"
+
+    Invoke-Command -ScriptBlock { Param($WacFQDN, $CertificateFile, $CertificatePassword)
+        $ProgressPreference = 'SilentlyContinue'
+        $AppInfo = Get-EvergreenApp MicrosoftWindowsAdminCenter
+        $WacVersion = $AppInfo.Version
+        $DownloadUrl = $AppInfo.URI
+        $WacInstaller = "$(Resolve-Path ~)\Documents\WindowsAdminCenter.exe"
+        Write-Host "Downloading Windows Admin Center $WacVersion"
+        Invoke-WebRequest $DownloadUrl -OutFile $WacInstaller
+        $CertificatePassword = ConvertTo-SecureString $CertificatePassword -AsPlainText -Force
+        $Params = @{
+            FilePath          = $CertificateFile;
+            CertStoreLocation = "cert:\LocalMachine\My";
+            Password          = $CertificatePassword;
+            Exportable        = $true;
+        }
+        $Certificate = Import-PfxCertificate @Params
+
+        $keyId = if ($PSEdition -eq 'Core') {
+            $Certificate.PrivateKey.Key.UniqueName
+        } else {
+            $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+        }
+        $keyFile = Join-Path "$Env:ProgramData\Microsoft\Crypto\RSA\MachineKeys" $keyId
+
+        $sid = 'S-1-5-20' # NETWORK SERVICE
+        $acl = Get-Acl -Path $keyFile
+        $sidObj = New-Object System.Security.Principal.SecurityIdentifier($sid)
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sidObj, "Read", "Allow")
+        $acl.AddAccessRule($rule)
+        Set-Acl -Path $keyFile -AclObject $acl
+
+        $WacPort = 6516
+        $WacInstaller = ".\WindowsAdminCenter.exe"
+
+        # Add installer signer certificate to TrustedPublishers
+        # It's the same certificate used for the PowerShell module, otherwise installation fails
+        $Signature = Get-AuthenticodeSignature -FilePath $WacInstaller
+        $SignerCertificate = $Signature.SignerCertificate
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("TrustedPublisher", "LocalMachine")
+        $store.Open("ReadWrite")
+        if (-Not ($store.Certificates.Thumbprint -contains $SignerCertificate.Thumbprint)) {
+            $store.Add($SignerCertificate)
+        }
+        $store.Close()
+
+        $ConsoleStartupRegPath = 'HKCU:\Console\%%Startup'
+        if (-Not (Test-Path $ConsoleStartupRegPath)) {
+            New-Item -Path $ConsoleStartupRegPath -Force | Out-Null
+        }
+        Set-ItemProperty -Path $ConsoleStartupRegPath -Name "DelegationConsole" -Value "{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}"
+        Set-ItemProperty -Path $ConsoleStartupRegPath -Name "DelegationTerminal" -Value "{B23D10C0-E52E-411E-9D5B-C09FDF709C7D}"
+
+        $LogPath = Join-Path $PWD "WacInstallerLog.txt"
+        Start-Process -FilePath '.\WindowsAdminCenter.exe' -ArgumentList @("/VERYSILENT", "/log=$LogPath") -Wait
+
+        Import-Module "$Env:ProgramFiles\WindowsAdminCenter\PowerShellModules\Microsoft.WindowsAdminCenter.Configuration"
+        Set-WACCertificateSubjectName -SubjectName $WacFQDN
+        Set-WACCertificateAcl -SubjectName $WacFQDN
+        Set-WACHttpsPorts -WacPort $WacPort
+        Restart-Service -Name WindowsAdminCenter
+    } -Session $VMSession -ArgumentList @($WacFQDN, $WacCertificateFile, $WacCertificatePassword)
+}
