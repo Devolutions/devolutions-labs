@@ -288,9 +288,43 @@ Invoke-Command -ScriptBlock { Param($HostUserName, $HostPassword)
     $user = [ADSI]"WinNT://$Env:COMPUTERNAME/$Env:USERNAME,user"
     $user.SetPassword($HostPassword)
 
-    $WinLogonRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-    Set-ItemProperty -Path $WinLogonRegPath -Name "AutoAdminLogon" -Value "1" -Type String
-    Set-ItemProperty -Path $WinLogonRegPath -Name "DefaultUserName" -Value $HostUserName -Type String
-    Set-ItemProperty -Path $WinLogonRegPath -Name "DefaultPassword" -Value $HostPassword -Type String
-    Set-ItemProperty -Path $WinLogonRegPath -Name "DefaultDomainName" -Value "." -Type String
+    $ProgressPreference = "SilentlyContinue"
+    $NativeArch = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { "arm64" } else { "x64" }
+    $RdpCredProvVersion = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/RdpCredProv/releases/latest").tag_name.TrimStart("v")
+    $RdpCredProvUrl = "https://github.com/Devolutions/RdpCredProv/releases/download/v$RdpCredProvVersion/RdpCredProv-$RdpCredProvVersion-$NativeArch.zip"
+    Invoke-WebRequest -UseBasicParsing -Uri $RdpCredProvUrl -OutFile "RdpCredProv.zip"
+    $TempExtractPath = Join-Path $Env:TEMP "RdpCredProv"
+    Expand-Archive -Path ".\RdpCredProv.zip" -DestinationPath $TempExtractPath
+    Copy-Item "$TempExtractPath\RdpCredProv.dll" "$Env:SystemRoot\System32\RdpCredProv.dll" -Force
+    Remove-Item -Path $TempExtractPath -Recurse | Out-Null
+    Remove-Item "RdpCredProv.zip" | Out-Null
+
+    $RdpCredProvClsid = "{DD2ACC5E-EF4B-4C89-B296-15489C9FAC47}"
+    $basePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\$RdpCredProvClsid"
+    New-Item -Path $basePath -Force | Out-Null
+    Set-ItemProperty -Path $basePath -Name "(default)" -Value "RdpCredProv"
+    $clsidRegPath = "CLSID\$RdpCredProvClsid"
+    $inprocPath = "CLSID\$RdpCredProvClsid\InprocServer32"
+    $regHKCR = [Microsoft.Win32.Registry]::ClassesRoot
+    $cpKey = $regHKCR.CreateSubKey($clsidRegPath)
+    $cpKey.SetValue("", "RdpCredProv")
+    $inprocKey = $regHKCR.CreateSubKey($inprocPath)
+    $inprocKey.SetValue("", "RdpCredProv.dll")
+    $inprocKey.SetValue("ThreadingModel", "Apartment")
+    $cpKey.Close()
+    $inprocKey.Close()
+
+    $RdpCredProvRegPath = "HKLM:\SOFTWARE\Devolutions\RdpCredProv"
+    New-Item -Path $RdpCredProvRegPath -Force | Out-Null
+    Set-ItemProperty -Path $RdpCredProvRegPath -Name "DefaultUserName" -Value $HostUserName
+    Set-ItemProperty -Path $RdpCredProvRegPath -Name "DefaultPassword" -Value $HostPassword
+    Set-ItemProperty -Path $RdpCredProvRegPath -Name "DefaultDomainName" -Value "."
+    Set-ItemProperty -Path $RdpCredProvRegPath -Name "AutoLogonWithDefault" -Value 1 -Type DWORD
+    Set-ItemProperty -Path $RdpCredProvRegPath -Name "UseDefaultCredentials" -Value 1 -Type DWORD
+    Set-ItemProperty -Path $RdpCredProvRegPath -Name "RemoteOnly" -Value 0 -Type DWORD
+
+    $WinlogonRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    Set-ItemProperty -Path $WinlogonRegPath -Name "DisableCAD" -Value 1 -Type DWORD
+    $SystemPoliciesRegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    Set-ItemProperty -Path $SystemPoliciesRegPath -Name "DisableCAD" -Value 1 -Type DWORD
 } -Session $VMSession -ArgumentList @($HostUserName, $HostPassword)
