@@ -5,7 +5,7 @@ $VMNumber = 6
 $VMName = $LabPrefix, $VMAlias -Join "-"
 $IpAddress = Get-DLabIpAddress $LabNetworkBase $VMNumber
 
-New-DLabVM $VMName -Password $LocalPassword -OSVersion $OSVersion -Force
+New-DLabVM $VMName -Password $LocalPassword -MemoryBytes 6GB -OSVersion $OSVersion -Force
 Start-DLabVM $VMName
 
 Wait-DLabVM $VMName 'Heartbeat' -Timeout 120 -UserName $LocalUserName -Password $LocalPassword
@@ -461,3 +461,9 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
     $DvlsAdminEmail)
+
+Write-Host "Making DVLS Scheduler dependent on SQL Server to fix service startup order"
+
+Invoke-Command -ScriptBlock {
+    sc config DevolutionsSchedulerServiceDVLS depend= 'MSSQL$SQLEXPRESS'
+} -Session $VMSession
