@@ -230,12 +230,15 @@ if ($ExportVMs) {
             if ($VMName.EndsWith("-DC")) {
                 $MemoryBytes = 2GB
                 $ProcessorCount = 2
+            } elseif ($VMName.EndsWith("-DVLS")) {
+                $MemoryBytes = 6GB
+                $ProcessorCount = 4
             } else {
                 $MemoryBytes = 4GB
                 $ProcessorCount = 4
             }
 
-            $MemoryStartupBytes = ([math]::Floor(($MemoryBytes / 1MB * 0.5) / 2) * 2) * 1MB
+            $MemoryStartupBytes = ([math]::Floor(($MemoryBytes / 1MB * 0.8) / 2) * 2) * 1MB
             $MemoryMinimumBytes = $MemoryStartupBytes
             $MemoryMaximumBytes = $MemoryBytes
 
