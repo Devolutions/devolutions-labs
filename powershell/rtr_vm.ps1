@@ -25,6 +25,8 @@ iface eth1 inet static
 $DnsMasqConf = @"
 interface=eth1
 dhcp-range=$DhcpRangeStart,$DhcpRangeEnd,255.255.255.0,12h
+server=/ad.it-help.ninja/10.10.0.3
+rev-server=10.10.0.0/24,10.10.0.3
 "@
 
 New-DLabRouterVM $VMName `

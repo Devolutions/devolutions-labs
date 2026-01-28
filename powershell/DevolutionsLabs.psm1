@@ -58,7 +58,14 @@ function Get-DLabIsoFilePath
     )
 
     $IsoPath = Get-DLabPath "ISOs"
-    $(Get-ChildItem -Path $IsoPath "*$Name*.iso" | Sort-Object LastWriteTime -Descending)[0]
+    $NameGlob = "*$Name*.iso"
+    $file = $(Get-ChildItem -Path $IsoPath $NameGlob | Sort-Object LastWriteTime -Descending) | Select-Object -First 1
+
+    if ($file -eq $null) {
+        throw "Could not find any ISO: $IsoPath\$NameGlob"
+    }
+
+    $file
 }
 
 function Get-DLabParentDiskFilePath
