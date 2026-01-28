@@ -402,9 +402,10 @@ Write-DLabLog "Installing Devolutions Windows Terminal"
 
 Invoke-Command -ScriptBlock {
     $ProgressPreference = "SilentlyContinue"
-    $WtVersion = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/wt-distro/releases/latest").tag_name.TrimStart("v")
-    $WtDownloadBase = "https://github.com/Devolutions/wt-distro/releases/download"
-    $WtDownloadUrl = "$WtDownloadBase/v${WtVersion}/WindowsTerminal-${WtVersion}-x64.msi"
+    $WtDownloadUrl = (Invoke-RestMethod "https://api.github.com/repos/Devolutions/wt-distro/releases") | 
+        Select-Object -ExpandProperty assets | 
+        Where-Object -Property browser_download_url -Match 'x64\.msi$' | 
+        Select-Object -ExpandProperty browser_download_url -First 1
     Invoke-WebRequest -UseBasicParsing $WtDownloadUrl -OutFile "WindowsTerminal.msi"
     Start-Process msiexec.exe -Wait -ArgumentList @("/i", "WindowsTerminal.msi", "/qn")
     Remove-Item "WindowsTerminal.msi"
