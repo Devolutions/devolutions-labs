@@ -113,3 +113,7 @@ Launch Remote Desktop Manager, then run the rdm_init.ps1 script to create and in
 ```
 
 You will need to restart Remote Desktop Manager after running the script to see the new data source in the list. This part usually doesn't work well, so if "IT-HELP-LAB" is missing from the list, simply create an SQLite data source of the same name using "%LocalAppData%\Devolutions\RemoteDesktopManager\IT-HELP-LAB.db" as database file.
+
+## DVLS Linux VM
+
+To provision an Ubuntu 22.04 Hyper-V VM pre-configured for DVLS Linux development, see [DVLS-Linux-VM.md](DVLS-Linux-VM.md).
