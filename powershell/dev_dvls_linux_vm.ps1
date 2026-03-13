@@ -1,6 +1,8 @@
 #Requires -RunAsAdministrator
 #Requires -Modules Hyper-V
 
+. .\common.ps1
+
 <#
 .SYNOPSIS
     Creates a Hyper-V Ubuntu 22.04 VM pre-configured for DVLS Linux development.
@@ -29,19 +31,18 @@ $ErrorActionPreference = "Stop"
 # ============================================================
 # CONFIGURATION — edit before running
 # ============================================================
-$VMName         = "IT-HELP-LINUX-DEBUG"
+$VMName         = $LabPrefix, "LINUX-DEBUG" -Join "-"
 $VMPath         = "C:\Hyper-V\VMs"
 $CloudImagePath = "C:\Hyper-V\ISOs\ubuntu-22.04-server-cloudimg-amd64.img"
 
 $VHDXSizeGB    = 40
 $MemoryGB      = 4
 $CPUCount      = 2
-$SwitchName    = "LAN Switch"      # Run: Get-VMSwitch | Select Name
 
 $VMIPAddress      = "10.10.0.10"   # Static IP on the lab LAN
 $VMSubnet         = "24"           # CIDR prefix length
-$VMGateway        = "10.10.0.2"   # Router VM (devolutions-labs rtr_vm)
-$VMDNS            = "10.10.0.2"   # Router VM runs dnsmasq
+$VMGateway        = $DefaultGateway
+$VMDNS            = $RTRIpAddress
 
 $VMUsername   = "devuser"
 $VMPassword   = "changeme123!"     # Change this! Pre-generated hash below must match.
