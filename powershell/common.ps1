@@ -28,7 +28,7 @@ $RTRVMNumber = 2
 $RTRIpAddress = Get-DLabIpAddress $LabNetworkBase $RTRVMNumber
 $DefaultGateway = $RTRIpAddress
 $DhcpRangeStart = Get-DLabIpAddress $LabNetworkBase 100
-$DhcpRangeEnd = Get-DLabIpAddress $LabNetworkBase 255
+$DhcpRangeEnd = Get-DLabIpAddress $LabNetworkBase 254
 
 $DomainName = "ad.$LabName"
 $DnsZoneName = $DomainName
