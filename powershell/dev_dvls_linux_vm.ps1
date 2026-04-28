@@ -21,7 +21,8 @@
         Copy to: C:\Hyper-V\ISOs\ubuntu-22.04-server-cloudimg-amd64.img
         Note: Uses NoCloud datasource natively — no image patching needed.
       - Hyper-V enabled with a LAN switch (internal)
-      - WSL (for cloud-localds seed ISO creation)
+      - qemu-img (via Chocolatey): choco install qemu -y
+        Restart PowerShell after install so qemu-img is in PATH.
       - Internet access via LAN switch NAT (no external/WiFi bridge needed)
 #>
 
@@ -35,31 +36,31 @@ $VMName         = $LabPrefix, "LINUX-DEBUG" -Join "-"
 $VMPath         = "C:\Hyper-V\VMs"
 $CloudImagePath = "C:\Hyper-V\ISOs\ubuntu-22.04-server-cloudimg-amd64.img"
 
-$VHDXSizeGB    = 40
-$MemoryGB      = 4
-$CPUCount      = 2
+$VHDXSizeGB = 40
+$MemoryGB   = 4
+$CPUCount   = 2
 
-$VMIPAddress      = "10.10.0.10"   # Static IP on the lab LAN
-$VMSubnet         = "24"           # CIDR prefix length
-$VMGateway        = $DefaultGateway
-$VMDNS            = $RTRIpAddress
+$VMIPAddress = "10.10.0.10"   # Static IP on the lab LAN
+$VMSubnet    = "24"           # CIDR prefix length
+$VMGateway   = $DefaultGateway
+$VMDNS       = $RTRIpAddress
 
-$VMUsername   = "devuser"
-$VMPassword   = "changeme123!"     # Change this! Pre-generated hash below must match.
-$SSHKeyPath    = "$env:USERPROFILE\.ssh\id_ed25519"
+$VMUsername = $LocalUserName
+$VMPassword = $LocalPassword
+$SSHKeyPath = "$env:USERPROFILE\.ssh\id_ed25519"
 if (-not (Test-Path "$SSHKeyPath.pub")) {
-    Write-Info "No SSH key found — generating id_ed25519..."
+    Write-Host "No SSH key found — generating id_ed25519..."
     ssh-keygen -t ed25519 -f $SSHKeyPath -N '""' -q
-    Write-Ok "SSH key generated: $SSHKeyPath"
+    Write-Host "   [OK] SSH key generated: $SSHKeyPath"
 }
 $SSHPublicKey = (Get-Content "$SSHKeyPath.pub" -Raw).Trim()
 
-# SHA-512 crypt hash of $VMPassword ("changeme123!").
-# Regenerate with: wsl openssl passwd -6 'yournewpassword'
-$VMPasswordHash = '$6$GJpgtdnTyoj8HZ5w$t0hV74DHPOKm0sPJJWXm46/CBg3Cj7uVCTSUMySj.oAX5G9KAkHq6tLhp8Lw4LNU88hFsxf2OLB7kM4dEOVuE0'
+# SHA-512 crypt hash of $LocalPassword ("Local123!").
+# Regenerate with: openssl passwd -6 'yournewpassword'  (Linux or Git Bash)
+$VMPasswordHash = '$6$TcCu928AsBS.AGmP$ajNJNt/X.cdprAGKeLXNGgzLY0GwUci06Bw9w.N96Duc8lWUXTYZFZs/4yDM2eeM3B.EOFHhcyN0euyQv9rKI/'
 # ============================================================
 
-$VHDXPath    = "$VMPath\$VMName\$VMName.vhdx"
+$VHDXPath    = "C:\Hyper-V\VHDs\$VMName.vhdx"
 $SeedISOPath = "$VMPath\$VMName\seed.iso"
 $SeedDir     = "$VMPath\$VMName\cloud-init"
 
@@ -76,26 +77,45 @@ function Write-Info([string]$Message) {
 }
 
 
-function ConvertTo-WslPath([string]$WindowsPath) {
-    if ($WindowsPath -match '^([A-Za-z]):\\(.*)$') {
-        $drive = $Matches[1].ToLower()
-        $rest  = $Matches[2] -replace '\\', '/'
-        return "/mnt/$drive/$rest"
-    }
-    return $WindowsPath -replace '\\', '/'
-}
-
 function New-SeedISO([string]$SourceDir, [string]$OutputISO) {
-    Write-Info "Using WSL cloud-localds..."
+    Write-Info "Creating seed ISO using IMAPI2FS (native Windows)..."
 
-    $wslOut        = ConvertTo-WslPath $OutputISO
-    $wslUserData   = ConvertTo-WslPath "$SourceDir\user-data"
-    $wslMetaData   = ConvertTo-WslPath "$SourceDir\meta-data"
-    $wslNetworkCfg = ConvertTo-WslPath "$SourceDir\network-config"
+    Add-Type @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 
-    $cmd = "DEBIAN_FRONTEND=noninteractive apt-get install -y cloud-utils -q && cloud-localds --network-config='$wslNetworkCfg' '$wslOut' '$wslUserData' '$wslMetaData'"
-    $output = wsl -u root -e bash -c $cmd 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "cloud-localds failed (exit $LASTEXITCODE):`n$output" }
+public static class ISOHelper {
+    public static void WriteIStreamToFile(object comStream, string filePath) {
+        IStream stream = (IStream)comStream;
+        using (FileStream fs = new FileStream(filePath, FileMode.Create)) {
+            byte[] buf = new byte[65536];
+            IntPtr bytesRead = Marshal.AllocHGlobal(sizeof(int));
+            try {
+                while (true) {
+                    stream.Read(buf, buf.Length, bytesRead);
+                    int read = Marshal.ReadInt32(bytesRead);
+                    if (read == 0) break;
+                    fs.Write(buf, 0, read);
+                }
+            } finally {
+                Marshal.FreeHGlobal(bytesRead);
+            }
+        }
+    }
+}
+'@
+
+    $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
+    $fsi.FileSystemsToCreate = 3  # ISO9660 + Joliet
+    $fsi.VolumeName           = 'cidata'
+    $fsi.Root.AddTreeWithNamedStreams($SourceDir, $false)
+    $result = $fsi.CreateResultImage()
+
+    [ISOHelper]::WriteIStreamToFile($result.ImageStream, $OutputISO)
+
+    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($fsi) | Out-Null
 }
 
 # --- Validate ---
@@ -103,9 +123,22 @@ Write-Step "Validating prerequisites"
 
 Write-Info "Checking cloud image: $CloudImagePath"
 if (-not (Test-Path $CloudImagePath)) {
-    throw "Cloud image not found: $CloudImagePath`nDownload: https://cloud-images.ubuntu.com/releases/22.04/release/`nFile: ubuntu-22.04-server-cloudimg-amd64-azure.vhd.tar.gz`nExtract: wsl tar xzf ubuntu-22.04-server-cloudimg-amd64-azure.vhd.tar.gz -C 'C:\Hyper-V\ISOs\'"
+    throw "Cloud image not found: $CloudImagePath`nDownload: https://cloud-images.ubuntu.com/releases/22.04/release/`nFile: ubuntu-22.04-server-cloudimg-amd64.img"
 }
 Write-Ok "Cloud image found."
+
+$QemuImg = Get-Command "qemu-img" -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty Source
+if (-not $QemuImg) {
+    $QemuImg = @(
+        "${env:ProgramFiles}\qemu\qemu-img.exe",
+        "${env:ProgramFiles(x86)}\qemu\qemu-img.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $QemuImg) {
+    throw "qemu-img not found. Install QEMU via Chocolatey:`n  choco install qemu -y`nThen restart PowerShell."
+}
+Write-Ok "qemu-img found: $QemuImg"
 
 Write-Info "Checking virtual switch: $SwitchName"
 if (-not (Get-VMSwitch -Name $SwitchName -ErrorAction SilentlyContinue)) {
@@ -136,6 +169,7 @@ Write-Info "SSH key  : $(if ($SSHPublicKey) { 'yes' } else { 'none' })"
 
 # --- Directories ---
 Write-Step "Creating directories"
+New-Item -ItemType Directory -Force -Path "C:\Hyper-V\VHDs" | Out-Null
 New-Item -ItemType Directory -Force -Path "$VMPath\$VMName" | Out-Null
 New-Item -ItemType Directory -Force -Path $SeedDir | Out-Null
 Write-Ok $SeedDir
@@ -195,7 +229,7 @@ runcmd:
   - |
     for i in 1 2 3; do
       curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && break
-      echo "dotnet-install.sh download attempt $i failed, retrying in 10s..."
+      echo "dotnet-install.sh download attempt `$i failed, retrying in 10s..."
       sleep 10
     done
     bash /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet
@@ -271,11 +305,10 @@ if (Test-Path $VHDXPath) {
     }
 }
 Write-Info "Converting to VHDX using qemu-img..."
-$wslImg  = ConvertTo-WslPath $CloudImagePath
-$wslVhdx = ConvertTo-WslPath $VHDXPath
-$output = wsl -u root -e bash -c "apt-get install -y qemu-utils -qq && qemu-img convert -f qcow2 -O vhdx -o subformat=dynamic '$wslImg' '$wslVhdx'" 2>&1
-Write-Host $output
+& $QemuImg convert -f qcow2 -O vhdx -o subformat=dynamic $CloudImagePath $VHDXPath
 if ($LASTEXITCODE -ne 0) { throw "qemu-img conversion failed." }
+Write-Info "Clearing sparse flag (required for Resize-VHD)..."
+fsutil sparse setflag $VHDXPath 0
 Write-Info "Resizing to $VHDXSizeGB GB..."
 Resize-VHD -Path $VHDXPath -SizeBytes ($VHDXSizeGB * 1GB)
 Write-Ok $VHDXPath
@@ -347,6 +380,10 @@ if ($ready) {
     Write-Info "Removing seed ISO..."
     Get-VMDvdDrive -VMName $VMName | Remove-VMDvdDrive
     Write-Ok "Seed ISO removed."
+
+    Write-Info "Cleaning up install files..."
+    Remove-Item -Recurse -Force "$VMPath\$VMName" -ErrorAction SilentlyContinue
+    Write-Ok "Install files removed."
 
     Write-Host @"
 
