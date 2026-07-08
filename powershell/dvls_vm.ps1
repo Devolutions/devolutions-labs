@@ -70,9 +70,9 @@ Write-Host "Installing IIS ASP.NET Core Module (ANCM)"
 
 Invoke-Command -ScriptBlock {
     # https://dotnet.microsoft.com/permalink/dotnetcore-current-windows-runtime-bundle-installer
-    $DotNetHostingFileName = "dotnet-hosting-9.0.4-win.exe"
-    $DotNetHostingFileUrl = "https://builds.dotnet.microsoft.com/dotnet/aspnetcore/Runtime/9.0.4/$DotNetHostingFileName"
-    $DotNetHostingFileSHA512 = 'e02d6e48361bc09f84aefef0653bd1eaa1324795d120758115818d77f1ba0bca751dcc7e7c143293c7831fd72ff566d7c2248d1cb795f8d251c04631bc4459ea'
+    $DotNetHostingFileName = "dotnet-hosting-10.0.9-win.exe"
+    $DotNetHostingFileUrl = "https://builds.dotnet.microsoft.com/dotnet/aspnetcore/Runtime/10.0.9/$DotNetHostingFileName"
+    $DotNetHostingFileSHA512 = '597b7ba22db3ecfb2897f0443a6986741833e1dabf13128013ffa92342dd1509a46661c04e38782fd47d0aafd6d2373cc9ab54242140c388500c46909ea2dd67'
     $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest $DotNetHostingFileUrl -OutFile "${Env:TEMP}\$DotNetHostingFileName"
     $FileHash = (Get-FileHash -Algorithm SHA512 "${Env:TEMP}\$DotNetHostingFileName").Hash
@@ -217,6 +217,7 @@ Invoke-Command -ScriptBlock { Param($DatabaseName, $SqlInstance, $SqlUsername, $
 
 $DvlsVersion = ""
 $GatewayVersion = ""
+$GatewayUrl = ""
 
 $ProductsHtm = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.htm" -Method 'GET' -ContentType 'text/plain'
 foreach ($line in $($ProductsHtm -split "`n")) {
@@ -224,6 +225,8 @@ foreach ($line in $($ProductsHtm -split "`n")) {
         $DvlsVersion = $matches[1].Trim()
     } elseif ($line -match '^Gatewaybin\.Version=(.+)$') {
         $GatewayVersion = $matches[1].Trim()
+    } elseif ($line -match '^Gatewaybin\.Url=(.+)$') {
+        $GatewayUrl = $matches[1].Trim()
     }
 }
 
@@ -236,6 +239,10 @@ if ([string]::IsNullOrEmpty($GatewayVersion)) {
     throw "failed to detect DVLS version"
 }
 Write-Host "Gateway Version: $GatewayVersion"
+
+if ([string]::IsNullOrEmpty($GatewayUrl)) {
+    throw "failed to detect Gateway download URL"
+}
 
 $DvlsSiteName = "DVLS"
 $DvlsPath = "C:\inetpub\dvlsroot"
@@ -395,7 +402,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion)
 
 Write-Host "Installing Devolutions Server"
 
-Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
+Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion, $GatewayUrl,
     $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
@@ -413,7 +420,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
     Write-Host "Downloading Devolutions Gateway version $GatewayVersion"
     $GatewayMsi = "$(Resolve-Path ~)\Documents\DevolutionsGateway.msi"
     if (-Not $(Test-Path -Path $GatewayMsi -PathType 'Leaf')) {
-        Invoke-WebRequest "$DownloadBaseUrl/DevolutionsGateway-x86_64-${GatewayVersion}.msi" -OutFile $GatewayMsi
+        Invoke-WebRequest $GatewayUrl -OutFile $GatewayMsi
     }
 
     $BackupKeysPassword = "DvlsBackupKeys123!"
@@ -456,7 +463,7 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
 
     & $DvlsConsoleCli @DvlsConsoleArgs
 
-} -Session $VMSession -ArgumentList @($DvlsVersion, $GatewayVersion,
+} -Session $VMSession -ArgumentList @($DvlsVersion, $GatewayVersion, $GatewayUrl,
     $DvlsPath, $DvlsSiteName, $DvlsAccessUri, $DatabaseName,
     $SqlInstance, $SqlUsername, $SqlPassword,
     $DvlsAdminUsername, $DvlsAdminPassword,
@@ -465,5 +472,5 @@ Invoke-Command -ScriptBlock { Param($DvlsVersion, $GatewayVersion,
 Write-Host "Making DVLS Scheduler dependent on SQL Server to fix service startup order"
 
 Invoke-Command -ScriptBlock {
-    sc config DevolutionsSchedulerServiceDVLS depend= 'MSSQL$SQLEXPRESS'
+    sc.exe config DevolutionsSchedulerServiceDVLS depend= 'MSSQL$SQLEXPRESS'
 } -Session $VMSession
