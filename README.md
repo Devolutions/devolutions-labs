@@ -74,6 +74,8 @@ Run the host_init.ps1 script to initialize the host environment:
 .\host_init.ps1
 ```
 
+For MSIX installations of PowerShell 7, the script runs DISM commands through Windows PowerShell 5.1 compatibility. The rest of the lab requires a PowerShell 7 remoting endpoint, which MSIX installations do not support.
+
 You may need to reboot the host for the Hyper-V feature installation to complete.
 
 ## Golden Image

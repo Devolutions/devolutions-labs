@@ -5,6 +5,10 @@ function Invoke-HostInit {
     param(
     )
 
+    if ($PSHOME -like "${Env:ProgramFiles}\WindowsApps\*") {
+        Import-Module Dism -UseWindowsPowerShell -ErrorAction Stop
+    }
+
     $IsChocoPresent = [bool](Get-Command -Name choco -CommandType Application -ErrorAction SilentlyContinue)
     $IsWingetPresent = [bool](Get-Command -Name winget -CommandType Application -ErrorAction SilentlyContinue)
 
@@ -34,8 +38,8 @@ function Invoke-HostInit {
     New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\Credssp" `
         -Name UseCachedCRLOnlyAndIgnoreRevocationUnknownErrors -Value 1 -Force | Out-Null
 
-    if ($(Get-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0").State -ne "Installed") {
-        Add-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0"
+    if ($(Get-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0" -ErrorAction Stop).State -ne "Installed") {
+        Add-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0" -ErrorAction Stop
     }
 
     if (-Not (Get-InstalledModule PsHosts -ErrorAction SilentlyContinue)) {
@@ -85,8 +89,8 @@ function Invoke-HostInit {
     }
 
     # Enable Hyper-V (requires a reboot)
-    if ($(Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Hyper-V").State -ne 'Enabled') {
-        Enable-WindowsOptionalFeature -Online -FeatureName @("Microsoft-Hyper-V") -All -NoRestart
+    if ($(Get-WindowsOptionalFeature -Online -FeatureName "Microsoft-Hyper-V" -ErrorAction Stop).State -ne 'Enabled') {
+        Enable-WindowsOptionalFeature -Online -FeatureName @("Microsoft-Hyper-V") -All -NoRestart -ErrorAction Stop
     }
 
     # Create LAN switch for the host and VMs
