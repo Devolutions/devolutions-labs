@@ -92,11 +92,14 @@ Invoke-Command -ScriptBlock {
 Write-Host "Installing Devolutions Remote Desktop Manager"
 
 Invoke-Command -ScriptBlock {
-    $ProductsHtm = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.htm" -Method 'GET' -ContentType 'text/plain'
-    $RdmMatches = $($ProductsHtm | Select-String -AllMatches -Pattern "(RDM\S+).Url=(\S+)").Matches
-    $RdmKeyName = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { "RDMmsiArm" } else { "RDMmsiX64" }
-    $RdmWindows = $RdmMatches | Where-Object { $_.Groups[1].Value -eq $RdmKeyName }
-    $RdmDownloadUrl = $RdmWindows.Groups[2].Value
+    $Products = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.json" -Method 'GET' -Headers @{ 'User-Agent' = 'Mozilla/5.0' }
+    $RdmArch = if ($Env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+    $RdmFile = $Products.RDMWindows.Current.Files | Where-Object { $_.Arch -eq $RdmArch -and $_.Type -eq 'msi' } | Select-Object -First 1
+    if (-not $RdmFile) {
+        throw "Could not find Remote Desktop Manager MSI for $RdmArch in productinfo.json"
+    }
+
+    $RdmDownloadUrl = $RdmFile.Url
     $RdmFileName = [System.IO.Path]::GetFileName($RdmDownloadUrl)
     $TempMsiPath = Join-Path $env:TEMP $RdmFileName
     $ProgressPreference = 'SilentlyContinue'
