@@ -85,7 +85,7 @@ $AnswerFilePath = Join-Path $AnswerTempPath "autounattend.xml"
 $Params = @{
     UserFullName = "devolutions";
     UserOrganization = "IT-HELP";
-    ComputerName = $Name;
+    ComputerName = $VMName;
     AdministratorPassword = $Password;
     OSVersion = $OSVersion;
     ImageIndex = $ImageIndex;
@@ -95,27 +95,48 @@ $Params = @{
 
 New-DLabAnswerFile $AnswerFilePath @Params
 
-$AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
-New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
-
 New-DLabParentVM $VMName -OSVersion $OSVersion -IsoFilePath $IsoFilePath -Force
 
-Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
+if ($OSVersion -eq '2025') {
+    try {
+        $ParentVhdPath = (Get-VMHardDiskDrive -VMName $VMName | Select-Object -First 1).Path
+        if (-Not $ParentVhdPath) {
+            throw "Could not find the golden VM's virtual hard disk"
+        }
 
-Write-DLabLog "Starting golden VM for Windows installation"
+        Write-DLabLog "Applying Windows image directly to the golden VM disk"
+        Install-DLabWindowsImage -IsoFilePath $IsoFilePath -VhdPath $ParentVhdPath `
+            -ImageIndex $ImageIndex -AnswerFilePath $AnswerFilePath
+    }
+    finally {
+        Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+    }
 
-Start-DLabVM $VMName
-Start-Sleep 5
+    Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
+        Remove-VMDvdDrive -ErrorAction Stop
 
-Write-DLabLog "Waiting for VM to reboot a first time during installation"
+    Write-DLabLog "Starting golden VM for first boot"
+    Start-DLabVM $VMName
+    Start-Sleep 5
+} else {
+    $AnswerIsoPath = Join-Path $([System.IO.Path]::GetTempPath()) "unattend-$VMName.iso"
+    New-DLabIsoFile -Path $AnswerTempPath -Destination $AnswerIsoPath -VolumeName "unattend"
 
-Wait-DLabVM $VMName 'Reboot' -Timeout 600
+    Add-VMDvdDrive -VMName $VMName -ControllerNumber 1 -Path $AnswerIsoPath
 
-Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
-    Remove-VMDvdDrive -ErrorAction SilentlyContinue
+    Write-DLabLog "Starting golden VM for Windows installation"
+    Start-DLabVM $VMName
+    Start-Sleep 5
 
-Remove-Item -Path $AnswerIsoPath -Force -ErrorAction SilentlyContinue | Out-Null
-Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+    Write-DLabLog "Waiting for VM to reboot a first time during installation"
+    Wait-DLabVM $VMName 'Reboot' -Timeout 600
+
+    Get-VMDvdDrive $VMName | Where-Object { $_.DvdMediaType -Like 'ISO' } |
+        Remove-VMDvdDrive -ErrorAction SilentlyContinue
+
+    Remove-Item -Path $AnswerIsoPath -Force -ErrorAction SilentlyContinue | Out-Null
+    Remove-Item -Path $AnswerTempPath -Recurse -Force -ErrorAction SilentlyContinue | Out-Null
+}
 
 Write-DLabLog "Waiting for VM to become ready after Windows installation"
 
