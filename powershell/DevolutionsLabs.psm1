@@ -621,6 +621,89 @@ function New-DLabParentVM
     Set-VM @Params
 }
 
+function Install-DLabWindowsImage
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string] $IsoFilePath,
+        [Parameter(Mandatory=$true)]
+        [string] $VhdPath,
+        [Parameter(Mandatory=$true)]
+        [int] $ImageIndex,
+        [Parameter(Mandatory=$true)]
+        [string] $AnswerFilePath
+    )
+
+    $IsoMount = $null
+    try {
+        $IsoMount = Mount-DiskImage -ImagePath $IsoFilePath -PassThru -ErrorAction Stop
+        $IsoVolume = Get-Volume -DiskImage $IsoMount -ErrorAction Stop |
+            Where-Object { $_.DriveLetter } | Select-Object -First 1
+        if (-Not $IsoVolume) {
+            throw "No drive letter is available for ISO '$IsoFilePath'"
+        }
+
+        $IsoRoot = "$($IsoVolume.DriveLetter):\"
+        $ImageFile = Join-Path $IsoRoot 'sources\install.wim'
+        if (-Not (Test-Path $ImageFile)) {
+            $ImageFile = Join-Path $IsoRoot 'sources\install.esd'
+        }
+        if (-Not (Test-Path $ImageFile)) {
+            throw "Neither install.wim nor install.esd found in '$IsoRoot\sources'"
+        }
+
+        $MountedVhd = $null
+        try {
+            $MountedVhd = Mount-VHD -Path $VhdPath -PassThru -ErrorAction Stop
+            $Disk = $MountedVhd | Get-Disk -ErrorAction Stop
+            $Disk | Initialize-Disk -PartitionStyle MBR -ErrorAction Stop | Out-Null
+
+            $BootPartition = New-Partition -DiskNumber $Disk.Number -Size 250MB `
+                -AssignDriveLetter -IsActive -ErrorAction Stop
+            $BootPartition | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'Boot' `
+                -Confirm:$false -ErrorAction Stop | Out-Null
+            $WindowsPartition = New-Partition -DiskNumber $Disk.Number -UseMaximumSize `
+                -AssignDriveLetter -ErrorAction Stop
+            $WindowsPartition | Format-Volume -FileSystem NTFS -NewFileSystemLabel 'System' `
+                -Confirm:$false -ErrorAction Stop | Out-Null
+
+            $BootRoot = "$($BootPartition.DriveLetter):\"
+            $WindowsRoot = "$($WindowsPartition.DriveLetter):\"
+            & dism.exe /Apply-Image "/ImageFile:$ImageFile" "/Index:$ImageIndex" "/ApplyDir:$WindowsRoot"
+            if ($LASTEXITCODE -ne 0) {
+                throw "DISM failed to apply Windows image $ImageIndex (exit code $LASTEXITCODE)"
+            }
+
+            & dism.exe "/Image:$WindowsRoot" "/Apply-Unattend:$AnswerFilePath"
+            if ($LASTEXITCODE -ne 0) {
+                throw "DISM failed to apply offline servicing settings (exit code $LASTEXITCODE)"
+            }
+
+            $WindowsDirectory = Join-Path $WindowsRoot 'Windows'
+            $PantherPath = Join-Path $WindowsDirectory 'Panther'
+            New-Item -ItemType Directory -Path $PantherPath -Force -ErrorAction Stop | Out-Null
+            Copy-Item -LiteralPath $AnswerFilePath -Destination (Join-Path $PantherPath 'unattend.xml') `
+                -Force -ErrorAction Stop
+
+            & (Join-Path $WindowsDirectory 'System32\bcdboot.exe') $WindowsDirectory /s $BootRoot /f BIOS
+            if ($LASTEXITCODE -ne 0) {
+                throw "BCDBoot failed to configure the Windows boot partition (exit code $LASTEXITCODE)"
+            }
+        }
+        finally {
+            if ($MountedVhd) {
+                Dismount-VHD -Path $VhdPath -ErrorAction Stop
+            }
+        }
+    }
+    finally {
+        if ($IsoMount) {
+            Dismount-DiskImage -ImagePath $IsoFilePath -ErrorAction Stop | Out-Null
+        }
+    }
+}
+
 function New-DLabVM
 {
     [CmdletBinding()]
@@ -847,20 +930,28 @@ function Wait-DLabVM
     }
 
     if ($Condition -eq 'PSDirect') {
+        $Timer = [System.Diagnostics.Stopwatch]::StartNew()
         $Credential = Get-DLabCredential -UserName $UserName -Password $Password
         while ((Invoke-Command -VMName $VMName -Credential $Credential `
-            { "test" } -ErrorAction SilentlyContinue) -ne "test") { Start-Sleep 5 }
+            { "test" } -ErrorAction SilentlyContinue) -ne "test") {
+            if ($Timer.Elapsed.TotalSeconds -ge $Timeout) {
+                throw "Timed out waiting for PowerShell Direct on VM `"$VMName`" after $Timeout seconds"
+            }
+            Start-Sleep 5
+        }
     } elseif ($Condition -eq 'Shutdown') {
         while ($(Get-VM $VMName).State -ne "Off") { Start-Sleep 5 }
     } elseif ($Condition -eq 'Reboot') {
         if (-Not $PSBoundParameters.ContainsKey('OldUptime')) {
             $OldUptime = $(Get-VM $VMName).Uptime
         }
-        do {
-            $NewUptime = $(Get-VM $VMName).Uptime
+        $Timer = [System.Diagnostics.Stopwatch]::StartNew()
+        while ($(Get-VM $VMName).Uptime -ge $OldUptime) {
+            if ($Timer.Elapsed.TotalSeconds -ge $Timeout) {
+                throw "Timed out waiting for VM `"$VMName`" to reboot after $Timeout seconds"
+            }
             Start-Sleep 5
         }
-        while ($NewUptime -ge $OldUptime)
     } else {
         Wait-VM $VMName -For $Condition -Timeout $Timeout
     }

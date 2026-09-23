@@ -86,7 +86,9 @@ Download the latest Windows Server .iso file (*_windows_server_2025_*.iso). This
 .\golden.ps1
 ```
 
-The process takes about an hour to complete, and creates a clean virtual hard disk image containing everything we need for all the virtual machines in the lab.
+The process takes about an hour to complete, and creates a clean virtual hard disk image containing everything we need for all the virtual machines in the lab. For Windows Server 2025, the script applies the selected ISO image directly to the VM disk using DISM, then configures its BIOS boot files; no product key is entered during installation. This does not activate Windows or provide a license.
+
+If the first boot fails, the script times out waiting for PowerShell Direct after 45 minutes. Inspect the VM's `Windows\Panther` logs before retrying; rerunning replaces the failed VM and its disk. Other Windows versions still use Windows Setup and time out after 10 minutes if the first reboot never occurs.
 
 ## Virtual Machines
 

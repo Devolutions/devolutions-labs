@@ -65,10 +65,6 @@
                <AcceptEula>true</AcceptEula>
                <FullName>User</FullName>
                <Organization>Organization</Organization>
-               <ProductKey>
-                  <Key></Key>
-                  <WillShowUI>Never</WillShowUI>
-               </ProductKey>
             </UserData>
         </component>
     </settings>
