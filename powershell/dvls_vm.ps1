@@ -219,24 +219,22 @@ $DvlsVersion = ""
 $GatewayVersion = ""
 $GatewayUrl = ""
 
-$ProductsHtm = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.htm" -Method 'GET' -ContentType 'text/plain'
-foreach ($line in $($ProductsHtm -split "`n")) {
-    if ($line -match '^DPSbin\.Version=(.+)$') {
-        $DvlsVersion = $matches[1].Trim()
-    } elseif ($line -match '^Gatewaybin\.Version=(.+)$') {
-        $GatewayVersion = $matches[1].Trim()
-    } elseif ($line -match '^Gatewaybin\.Url=(.+)$') {
-        $GatewayUrl = $matches[1].Trim()
-    }
+$Products = Invoke-RestMethod -Uri "https://devolutions.net/productinfo.json" -Method 'GET' -Headers @{ 'User-Agent' = 'Mozilla/5.0' }
+$DvlsVersion = $Products.DVLS.Current.Version
+$GatewayVersion = $Products.Gateway.Current.Version
+$GatewayFile = $Products.Gateway.Current.Files | Where-Object { $_.Arch -eq 'x64' -and $_.Type -eq 'msi' } | Select-Object -First 1
+if (-not $GatewayFile) {
+    throw "failed to detect Gateway download URL from productinfo.json"
 }
+$GatewayUrl = $GatewayFile.Url
 
 if ([string]::IsNullOrEmpty($DvlsVersion)) {
     throw "failed to detect DVLS version"
 }
-Write-Host "DVLS Version: $DVLSVersion"
+Write-Host "DVLS Version: $DvlsVersion"
 
 if ([string]::IsNullOrEmpty($GatewayVersion)) {
-    throw "failed to detect DVLS version"
+    throw "failed to detect Gateway version"
 }
 Write-Host "Gateway Version: $GatewayVersion"
 
