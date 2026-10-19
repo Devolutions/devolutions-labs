@@ -301,23 +301,27 @@ Invoke-Command -ScriptBlock {
     Remove-WindowsCapability -Online -Name AzureArcSetup~~~~
 } -Session $VMSession
 
-$CloudflareWarpCA = Get-ChildItem "cert:\LocalMachine\Root" |
-    Where-Object { $_.Subject -like "*Gateway CA - Cloudflare Managed G1*" }
+# Cloudflare WARP TLS inspection now signs with a Devolutions chain instead of the Cloudflare managed CA
+$CloudflareWarpCAs = Get-ChildItem "cert:\LocalMachine\Root" | Where-Object {
+    ($_.Subject -like "*Gateway CA - Cloudflare Managed G1*") -or
+    ($_.Subject -like "CN=Devolutions Device Root CA,*")
+}
 
-if ($CloudflareWarpCA) {
+foreach ($CloudflareWarpCA in $CloudflareWarpCAs) {
     Write-DLabLog "Found Cloudflare WARP CA: $($CloudflareWarpCA.Subject)"
 
-    $TempCertPath = Join-Path $Env:TEMP "CloudflareWarpCA.cer"
-    Export-Certificate -Cert $CloudflareWarpCA -FilePath $TempCertPath -Force
+    $CertFileName = "CloudflareWarpCA-$($CloudflareWarpCA.Thumbprint).cer"
+    $TempCertPath = Join-Path $Env:TEMP $CertFileName
+    Export-Certificate -Cert $CloudflareWarpCA -FilePath $TempCertPath -Force | Out-Null
     Copy-Item -Path $TempCertPath -Destination "C:\Users\Public\" -ToSession $VMSession
     Remove-Item $TempCertPath -Force | Out-Null
 
     Write-DLabLog "Importing Cloudflare WARP CA..."
-    Invoke-Command -ScriptBlock {
-        $CertPath = "C:\Users\Public\CloudflareWarpCA.cer"
+    Invoke-Command -ScriptBlock { Param($CertFileName)
+        $CertPath = "C:\Users\Public\$CertFileName"
         Import-Certificate -FilePath $CertPath -CertStoreLocation "cert:\LocalMachine\Root" | Out-Null
         Remove-Item $CertPath -Force | Out-Null
-    } -Session $VMSession
+    } -Session $VMSession -ArgumentList @($CertFileName)
 }
 
 Write-DLabLog "Configuring initial PowerShell environment"

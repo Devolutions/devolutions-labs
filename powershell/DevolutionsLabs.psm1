@@ -686,7 +686,8 @@ function Install-DLabWindowsImage
             Copy-Item -LiteralPath $AnswerFilePath -Destination (Join-Path $PantherPath 'unattend.xml') `
                 -Force -ErrorAction Stop
 
-            & (Join-Path $WindowsDirectory 'System32\bcdboot.exe') $WindowsDirectory /s $BootRoot /f BIOS
+            # The host's bcdboot: Code Integrity can block the offline image's DLLs, whose catalogs aren't on the host
+            & (Join-Path $env:SystemRoot 'System32\bcdboot.exe') $WindowsDirectory /s $BootRoot /f BIOS
             if ($LASTEXITCODE -ne 0) {
                 throw "BCDBoot failed to configure the Windows boot partition (exit code $LASTEXITCODE)"
             }
