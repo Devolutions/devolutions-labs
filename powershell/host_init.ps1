@@ -85,7 +85,12 @@ function Invoke-HostInit {
 
     if (-Not $(Test-Path -Path $AlpineIsoDownloadPath -PathType 'Leaf')) {
         Write-Host "Downloading $AlpineIsoDownloadUrl"
-        curl.exe $AlpineIsoDownloadUrl -o $AlpineIsoDownloadPath
+        # Schannel rejects TLS inspection certificates (Cloudflare WARP) whose revocation status can't be checked
+        curl.exe -f --ssl-revoke-best-effort $AlpineIsoDownloadUrl -o $AlpineIsoDownloadPath
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item -Path $AlpineIsoDownloadPath -Force -ErrorAction SilentlyContinue
+            throw "Failed to download '$AlpineIsoDownloadUrl' (curl exit code $LASTEXITCODE)"
+        }
     }
 
     # Enable Hyper-V (requires a reboot)
